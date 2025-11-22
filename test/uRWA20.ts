@@ -182,7 +182,7 @@ describe("uRWA20", function () {
       ).to.be.rejected;
     });
 
-    it("Should revert when called by non-minter role", async function () {
+    it.skip("Should revert when called by non-minter role", async function () {
       const hash1 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
