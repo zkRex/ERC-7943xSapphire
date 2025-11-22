@@ -14,8 +14,9 @@ const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [];
 // This matches the mnemonic used by sapphire-localnet
 const localnetMnemonic = "test test test test test test test test test test test junk";
 
-// Localnet URL - defaults to http://51.83.238.236:8545, can be overridden with LOCALNET_URL env var
-const localnetUrl = process.env.LOCALNET_URL || "http://51.83.238.236:8545";
+// Localnet URL - can be overridden with LOCALNET_URL env var
+// Defaults to http://localhost:8545 if not set
+const localnetUrl = process.env.LOCALNET_URL || "http://localhost:8545";
 
 // Define custom chain for Sapphire localnet (chainId: 0x5afd = 23293)
 const sapphireLocalnetChain = defineChain({
