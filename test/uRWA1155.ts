@@ -2,6 +2,7 @@ import { expect } from "chai";
 import hre from "hardhat";
 import { getAddress, parseEther } from "viem";
 import { sapphireLocalnetChain } from "../hardhat.config";
+import { waitForTx, waitForTxs } from "./utils";
 
 const itIfSupportsEventLogs =
   hre.network.name === "sapphire-localnet" ? it.skip : it;
@@ -61,7 +62,7 @@ describe("uRWA1155", function () {
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash });
+      await waitForTx(hash, publicClient);
       
       expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
     });
@@ -73,7 +74,7 @@ describe("uRWA1155", function () {
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash });
+      await waitForTx(hash, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(otherAccount.account.address),
@@ -94,7 +95,7 @@ describe("uRWA1155", function () {
         getAddress(otherAccount.account.address),
         false,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash });
+      await waitForTx(hash, publicClient);
       
       // Verify account is not whitelisted
       expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
@@ -115,7 +116,7 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -140,7 +141,7 @@ describe("uRWA1155", function () {
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(otherAccount.account.address),
@@ -169,13 +170,13 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -211,13 +212,13 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -273,13 +274,13 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -326,13 +327,13 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -354,13 +355,13 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
