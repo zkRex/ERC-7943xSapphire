@@ -81,7 +81,7 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
       
       expect(await token.read.balanceOf([
         getAddress(otherAccount.account.address),
@@ -123,10 +123,10 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const burnHash = await token.write.burn([1n, parseEther("50")]);
-      await publicClient.waitForTransactionReceipt({ hash: burnHash });
+      await waitForTx(burnHash, publicClient);
       
       expect(await token.read.balanceOf([
         getAddress(owner.account.address),
@@ -148,14 +148,14 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const freezeHash = await token.write.setFrozenTokens([
         getAddress(otherAccount.account.address),
         1n,
         parseEther("50"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
       
       expect(await token.read.getFrozenTokens([
         getAddress(otherAccount.account.address),
@@ -183,7 +183,7 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const config = { client: { public: publicClient, wallet: owner } };
       const tokenAsOwner = await hre.viem.getContractAt("uRWA1155", token.address, config);
@@ -195,7 +195,7 @@ describe("uRWA1155", function () {
         parseEther("50"),
         "0x",
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: transferHash });
+      await waitForTx(transferHash, publicClient);
       
       expect(await token.read.balanceOf([
         getAddress(owner.account.address),
@@ -225,14 +225,14 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const freezeHash = await token.write.setFrozenTokens([
         getAddress(owner.account.address),
         1n,
         parseEther("60"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       // Verify frozen tokens
       expect(await token.read.getFrozenTokens([
@@ -287,14 +287,14 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const freezeHash = await token.write.setFrozenTokens([
         getAddress(owner.account.address),
         1n,
         parseEther("60"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       const forceHash = await token.write.forcedTransfer([
         getAddress(owner.account.address),
@@ -302,7 +302,7 @@ describe("uRWA1155", function () {
         1n,
         parseEther("50"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: forceHash });
+      await waitForTx(forceHash, publicClient);
       
       expect(await token.read.balanceOf([
         getAddress(owner.account.address),
@@ -340,7 +340,7 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       expect(await token.read.canTransfer([
         getAddress(owner.account.address),
@@ -368,14 +368,14 @@ describe("uRWA1155", function () {
         1n,
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const freezeHash = await token.write.setFrozenTokens([
         getAddress(owner.account.address),
         1n,
         parseEther("60"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       expect(await token.read.canTransfer([
         getAddress(owner.account.address),
