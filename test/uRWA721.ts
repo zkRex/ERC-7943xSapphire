@@ -97,6 +97,9 @@ describe("uRWA721", function () {
       ]);
       await publicClient.waitForTransactionReceipt({ hash });
       
+      // Verify account is not whitelisted
+      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      
       await expect(
         token.write.safeMint([
           getAddress(otherAccount.account.address),
@@ -213,6 +216,19 @@ describe("uRWA721", function () {
         true,
       ]);
       await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+
+      // Verify token is frozen
+      expect(await token.read.getFrozenTokens([
+        getAddress(owner.account.address),
+        1n,
+      ])).to.be.true;
+      
+      // Verify canTransfer returns false
+      expect(await token.read.canTransfer([
+        getAddress(owner.account.address),
+        getAddress(otherAccount.account.address),
+        1n,
+      ])).to.be.false;
 
       const config = { client: { public: publicClient, wallet: owner } };
       const tokenAsOwner = await hre.viem.getContractAt("uRWA721", token.address, config);
