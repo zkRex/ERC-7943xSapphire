@@ -265,6 +265,7 @@ describe("uRWA20", function () {
     });
 
     it("Should revert when called by non-freezing role", async function () {
+      // otherAccount does NOT have FREEZING_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
       
@@ -308,17 +309,33 @@ describe("uRWA20", function () {
     });
 
     it("Should revert transfer from non-whitelisted account", async function () {
+      // Ensure owner is NOT whitelisted
       const hash1 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        false,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+
+      // Mint tokens to owner (this will fail because owner is not whitelisted)
+      // So we need to whitelist first, mint, then remove whitelist
+      const hash2 = await token.write.changeWhitelist([
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await publicClient.waitForTransactionReceipt({ hash: hash2 });
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
         parseEther("100"),
       ]);
       await publicClient.waitForTransactionReceipt({ hash: mintHash });
+
+      // Now remove from whitelist
+      const hash3 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        false,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash: hash3 });
 
       const config = { client: { public: publicClient, wallet: owner } };
       const tokenAsOwner = await hre.viem.getContractAt("uRWA20", token.address, config);
@@ -429,7 +446,8 @@ describe("uRWA20", function () {
       expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("50"));
       expect(await token.read.balanceOf([getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
       // Frozen tokens should be reduced since we transferred from frozen balance
-      expect(await token.read.getFrozenTokens([getAddress(owner.account.address)])).to.equal(parseEther("10"));
+      // Unfrozen was 40, we transferred 50, so we took 10 from frozen: 60 - 10 = 50
+      expect(await token.read.getFrozenTokens([getAddress(owner.account.address)])).to.equal(parseEther("50"));
     });
 
     it("Should revert when called by non-force-transfer role", async function () {
