@@ -150,7 +150,7 @@ describe("uRWA721", function () {
         1n,
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
       
       expect(await token.read.getFrozenTokens([
         getAddress(otherAccount.account.address),
@@ -165,13 +165,11 @@ describe("uRWA721", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.safeMint([
         getAddress(owner.account.address),
@@ -187,7 +185,7 @@ describe("uRWA721", function () {
         getAddress(otherAccount.account.address),
         1n,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: transferHash });
+      await waitForTx(transferHash, publicClient);
       
       expect(await token.read.ownerOf([1n])).to.equal(getAddress(otherAccount.account.address));
     });
@@ -197,13 +195,11 @@ describe("uRWA721", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.safeMint([
         getAddress(owner.account.address),
@@ -216,7 +212,7 @@ describe("uRWA721", function () {
         1n,
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       // Verify token is frozen
       expect(await token.read.getFrozenTokens([
@@ -250,13 +246,11 @@ describe("uRWA721", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.safeMint([
         getAddress(owner.account.address),
@@ -269,14 +263,14 @@ describe("uRWA721", function () {
         1n,
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       const forceHash = await token.write.forcedTransfer([
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: forceHash });
+      await waitForTx(forceHash, publicClient);
       
       expect(await token.read.ownerOf([1n])).to.equal(getAddress(otherAccount.account.address));
       // Token should be unfrozen after forced transfer
@@ -293,13 +287,11 @@ describe("uRWA721", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.safeMint([
         getAddress(owner.account.address),
@@ -319,13 +311,11 @@ describe("uRWA721", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.safeMint([
         getAddress(owner.account.address),
@@ -338,7 +328,7 @@ describe("uRWA721", function () {
         1n,
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       expect(await token.read.canTransfer([
         getAddress(owner.account.address),
