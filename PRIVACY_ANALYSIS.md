@@ -2,11 +2,18 @@
 
 ## Executive Summary
 
-Your implementation has **several critical privacy issues** that need to be addressed to properly leverage Sapphire's confidential computing features. While the contracts correctly use encrypted state (automatic on Sapphire), they leak private information through events and view functions.
+Your implementation has **several critical privacy issues** that need to be addressed to properly leverage Sapphire's confidential computing features. While the contracts correctly use encrypted state (automatic on Sapphire), they leak private information through:
+
+1. **Public Events**: All events (transfers, freezes, whitelist changes) are plaintext and publicly visible
+2. **Public Queryability**: All view functions are publicly accessible without authentication - anyone can query balances, ownership, whitelist status, freeze amounts, and role assignments
+3. **Storage Access Patterns**: Transfer patterns are visible to compute nodes through storage access traces
+4. **Gas/Timing Side Channels**: Conditional branches leak information through gas usage
+
+**The system provides encrypted storage but complete public observability and queryability**, which defeats the purpose of confidential computing for RWA tokens.
 
 ## Critical Issues
 
-### 1. Events Leak Private Information ⚠️ CRITICAL
+### 1. Events Leak Private Information [CRITICAL]
 
 **Problem**: Contract logs/events are **NOT encrypted** on Sapphire. All events are publicly visible and leak sensitive information.
 
@@ -54,21 +61,45 @@ According to [Sapphire documentation](https://docs.oasis.io/build/sapphire/devel
 **Reference**: 
 > "Unmodified contracts may leak state through logs. Base contracts like those provided by OpenZeppelin often emit logs containing private information. If you don't know they're doing that, you might undermine the confidentiality of your state."
 
-### 2. Public View Functions Expose Private State ⚠️ HIGH
+### 2. Public Queryability: View Functions Expose Private State [HIGH]
 
-**Problem**: Public view functions expose private state to anyone, defeating the purpose of confidential computing.
+**Problem**: Public view functions expose private state to anyone, defeating the purpose of confidential computing. **Anyone can query sensitive information without authentication**, making the system publicly queryable despite encrypted storage.
 
 **Current Issues**:
 
-**All Contracts**:
-- `balanceOf(address)` - exposes token balances (public)
-- `getFrozenTokens(address)` - exposes frozen amounts (public)
+#### ERC-7943 Specific Functions (All Contracts):
 - `canTransact(address)` - exposes whitelist status (public)
 - `canTransfer(...)` - exposes transfer permissions (public)
+- `getFrozenTokens(...)` - exposes frozen amounts/status (public)
+
+#### Inherited ERC-20 Functions (uRWA20):
+- `balanceOf(address)` - exposes token balances (public)
+- `totalSupply()` - exposes total token supply (public)
+- `allowance(address owner, address spender)` - exposes approval amounts (public)
+
+#### Inherited ERC-721 Functions (uRWA721):
+- `balanceOf(address)` - exposes number of tokens owned (public)
+- `ownerOf(uint256 tokenId)` - exposes token ownership (public)
+- `tokenURI(uint256 tokenId)` - exposes token metadata URI (public)
+- `getApproved(uint256 tokenId)` - exposes token approvals (public)
+- `isApprovedForAll(address owner, address operator)` - exposes operator approvals (public)
+
+#### Inherited ERC-1155 Functions (uRWA1155):
+- `balanceOf(address account, uint256 id)` - exposes token balances (public)
+- `balanceOfBatch(address[] accounts, uint256[] ids)` - exposes multiple balances in one call (public)
+- `uri(uint256 id)` - exposes token metadata URI (public)
+- `isApprovedForAll(address account, address operator)` - exposes operator approvals (public)
+
+#### Inherited AccessControl Functions (All Contracts):
+- `hasRole(bytes32 role, address account)` - exposes role assignments (public)
+- `getRoleMember(bytes32 role, uint256 index)` - exposes role members (public)
+- `getRoleMemberCount(bytes32 role)` - exposes role membership counts (public)
 
 **Impact**: 
-- Anyone can query balances, freeze status, and whitelist status
-- This defeats the privacy benefits of Sapphire
+- **Complete public queryability**: Anyone can query balances, freeze status, whitelist status, token ownership, approvals, and role assignments
+- **No privacy for sensitive RWA data**: Token holdings, KYC status (via whitelist), and freeze amounts are completely transparent
+- **Defeats the privacy benefits of Sapphire**: While state is encrypted, all information is accessible through public view functions
+- **Enables surveillance**: Observers can build complete profiles of token holders and their activities
 
 **Recommendation**:
 1. **Add access control** - Restrict view functions to authorized parties using `onlyRole` modifiers
@@ -78,7 +109,7 @@ According to [Sapphire documentation](https://docs.oasis.io/build/sapphire/devel
 **Reference**: 
 > "The `from` address using of calls is derived from a signature attached to the call. Unsigned calls have their sender set to the zero address. This allows contract authors to write getters that release secrets to authenticated callers (e.g. by checking the `msg.sender` value), but without requiring a transaction to be posted on-chain."
 
-### 3. Storage Access Patterns Leak Information ⚠️ MEDIUM
+### 3. Storage Access Patterns Leak Information [MEDIUM]
 
 **Problem**: While storage values are encrypted, the **access patterns** (which storage slots are accessed) are visible to compute nodes.
 
@@ -99,7 +130,7 @@ According to [Sapphire documentation](https://docs.oasis.io/build/sapphire/devel
 **Reference**:
 > "Contract state leaks a fine-grained access pattern. Contract state is backed by an encrypted key-value store. However, the trace of encrypted records is leaked to the compute node. As a concrete example, an ERC-20 token transfer would leak which encrypted record is for the sender's account balance and which is for the receiver's account balance. Such a token would be traceable from sender address to receiver address."
 
-### 4. Gas and Timing Side Channels ⚠️ MEDIUM
+### 4. Gas and Timing Side Channels [MEDIUM]
 
 **Problem**: Gas usage and execution time can leak information about private data through side channels.
 
@@ -116,19 +147,19 @@ According to [Sapphire documentation](https://docs.oasis.io/build/sapphire/devel
 **Reference**:
 > "You should be aware that taking actions based on the value of private data may leak the private data through side channels like time spent, gas use and accessed memory locations. If you need to branch on private data, you should in most cases ensure that both branches exhibit the same time/gas and storage patterns."
 
-## What's Working Well ✅
+## What's Working Well
 
-### 1. Encrypted State ✅
+### 1. Encrypted State
 - Using `mapping` for state (not `immutable` or `constant`)
 - State will be automatically encrypted on Sapphire
 - No sensitive data stored in bytecode
 
-### 2. Testing Setup ✅
+### 2. Testing Setup
 - Using `@oasisprotocol/sapphire-hardhat` for encrypted transactions
 - Testing on `sapphire-localnet`
 - Proper network configuration
 
-### 3. Transaction Encryption ✅
+### 3. Transaction Encryption
 - Hardhat config includes Sapphire provider
 - Transactions will be encrypted automatically
 
@@ -230,13 +261,33 @@ Your current tests don't verify privacy. Consider adding:
 
 ## Conclusion
 
-While your implementation correctly uses Sapphire's encrypted state and transaction features, **it leaks significant private information through events and public view functions**. To properly leverage Sapphire's privacy features, you need to:
+While your implementation correctly uses Sapphire's encrypted state and transaction features, **it leaks significant private information through events and public view functions**. The system suffers from **complete public queryability** - anyone can query all sensitive information without authentication.
 
-1. ✅ Remove or encrypt Transfer events
-2. ✅ Add access control to view functions  
-3. ✅ Remove or encrypt custom events
-4. ⚠️ Consider storage access pattern obfuscation
-5. ⚠️ Add gas padding for private data branches
+### Summary of Privacy Leaks:
 
-The current implementation provides **confidential state** but **public observability**, which may not meet your privacy requirements for RWA tokens.
+1. **Public Observability** (via Events):
+   - All transfers, freezes, whitelist changes, and forced transfers are publicly visible in logs
+   - Transfer history is completely transparent
+
+2. **Public Queryability** (via View Functions):
+   - All token balances, ownership, approvals, and metadata are publicly queryable
+   - Whitelist status, freeze amounts, and role assignments are publicly accessible
+   - No authentication required for any view function
+
+3. **Storage Access Patterns** (via compute node visibility):
+   - Transfer patterns can be inferred from storage access traces
+   - Sender/receiver relationships are traceable
+
+4. **Gas/Timing Side Channels**:
+   - Conditional branches leak information through gas usage patterns
+
+### Required Actions:
+
+1. Remove or encrypt Transfer events
+2. Add access control to **all** view functions (balanceOf, ownerOf, getFrozenTokens, canTransact, etc.)
+3. Remove or encrypt custom events (ForcedTransfer, Frozen, Whitelisted)
+4. Consider storage access pattern obfuscation
+5. Add gas padding for private data branches
+
+The current implementation provides **confidential state** but **public observability and public queryability**, which completely undermines privacy for RWA tokens. To achieve true privacy on Sapphire, you must restrict both event emissions and view function access.
 
