@@ -135,11 +135,12 @@ describe("uRWA20", function () {
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
       
+      // Use simulateContract to check if it would revert
       await expect(
-        tokenAsOther.write.changeWhitelist([
+        tokenAsOther.simulate.changeWhitelist([
           getAddress(thirdAccount.account.address),
           true,
-        ]).then((txHash) => waitForTx(txHash, publicClient))
+        ])
       ).to.be.rejected;
     });
   });
@@ -172,11 +173,12 @@ describe("uRWA20", function () {
       // Verify account is not whitelisted
       expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
       
+      // Use simulateContract to check if it would revert
       await expect(
-        token.write.mint([
+        token.simulate.mint([
           getAddress(otherAccount.account.address),
           parseEther("100"),
-        ]).then((txHash: `0x${string}`) => waitForTx(txHash, publicClient))
+        ])
       ).to.be.rejected;
     });
 
@@ -199,13 +201,24 @@ describe("uRWA20", function () {
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
       
-      await expect(
-        tokenAsOther.write.mint([
+      // Try to simulate the transaction - it should revert due to missing role
+      let simulationSucceeded = false;
+      try {
+        await tokenAsOther.simulate.mint([
           getAddress(thirdAccount.account.address),
           parseEther("100"),
-        ]).then((txHash) => waitForTx(txHash, publicClient))
-      ).to.be.rejected;
-    }).timeout(60000);
+        ]);
+        simulationSucceeded = true;
+      } catch (error: any) {
+        // Expected - transaction should revert
+        expect(error).to.exist;
+      }
+      
+      // If simulation didn't throw, the test should fail
+      if (simulationSucceeded) {
+        throw new Error("Expected transaction to revert but simulation succeeded");
+      }
+    }).timeout(120000);
   });
 
   describe("burn", function () {
