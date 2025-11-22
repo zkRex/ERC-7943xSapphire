@@ -90,6 +90,13 @@ describe("uRWA721", function () {
     });
 
     it("Should revert when minting to non-whitelisted account", async function () {
+      // Ensure otherAccount is NOT whitelisted
+      const hash = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        false,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash });
+      
       await expect(
         token.write.safeMint([
           getAddress(otherAccount.account.address),
