@@ -75,22 +75,18 @@ LOCALNET_URL=http://localhost:8545
 To run tests locally, start a Sapphire localnet node:
 
 ```shell
-docker run -it -p8544-8548:8544-8548 ghcr.io/oasisprotocol/sapphire-localnet
+docker run -it --rm -p8544-8548:8544-8548 --platform linux/x86_64 ghcr.io/oasisprotocol/sapphire-localnet
 ```
 
 The localnet uses the standard Hardhat test mnemonic and runs on `http://localhost:8545` by default.
 
-**Note for Apple Silicon users**: If you encounter difficulties running the Docker image on Apple Silicon (M1/M2/M3), it's recommended to run the localnet on a remote server and use SSH port forwarding:
+**macOS Startup Issue on Apple Silicon**
 
-```shell
-# On your local machine, forward ports to the remote server
-ssh -L 8545:localhost:8545 -L 8546:localhost:8546 -L 8547:localhost:8547 -L 8548:localhost:8548 user@remote-server
+On Apple Silicon Macs running macOS 26 (Tahoe) or later, the sapphire-localnet Docker image may hang on startup with peer authentication errors (e.g., chacha20poly1305: message authentication failed).
 
-# On the remote server, run the Docker container
-docker run -it -p8544-8548:8544-8548 ghcr.io/oasisprotocol/sapphire-localnet
-```
+This is due to a bug in Rosetta 2's x86_64 emulation. The workaround is to disable Rosetta in Docker Desktop settings, which makes Docker use QEMU instead.
 
-Then configure your `LOCALNET_URL` environment variable or use the default `http://localhost:8545` which will be forwarded to the remote server.
+Go to Settings > Virtual Machine Options and disable "Use Rosetta for x86/amd64 emulation on Apple Silicon".
 
 ### Network Configuration
 
