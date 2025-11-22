@@ -101,11 +101,12 @@ describe("uRWA721", function () {
       // Verify account is not whitelisted
       expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
       
+      // Use simulateContract to check if it would revert
       await expect(
-        token.write.safeMint([
+        token.simulate.safeMint([
           getAddress(otherAccount.account.address),
           1n,
-        ]).then((txHash: `0x${string}`) => waitForTx(txHash, publicClient))
+        ])
       ).to.be.rejected;
     });
   });
