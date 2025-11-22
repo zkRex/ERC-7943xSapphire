@@ -12,6 +12,11 @@ This repository contains Solidity contracts implementing ERC-7943 standards on S
 
 All contracts are designed to work with Sapphire's privacy features, including encrypted calldata and state, while maintaining compatibility with the ERC-7943 standard.
 
+**Technical Details:**
+- Solidity version: `^0.8.28`
+- Built with Hardhat and OpenZeppelin Contracts v5.4.0
+- Uses TypeScript for tests and deployment scripts
+
 ## Testing
 
 Tests are run against a local Sapphire node (Hardhat network `sapphire-localnet`). The test suite validates:
@@ -26,8 +31,8 @@ Tests are run against a local Sapphire node (Hardhat network `sapphire-localnet`
 Run tests with:
 
 ```shell
-npx hardhat test
-REPORT_GAS=true npx hardhat test
+pnpm test
+REPORT_GAS=true pnpm test
 ```
 
 ## Privacy Considerations
@@ -41,26 +46,100 @@ On Sapphire:
 
 ### Prerequisites
 
-- A local Sapphire node running
 - Node.js and pnpm installed
+- A local Sapphire node running (for local testing)
+
+### Installation
+
+```shell
+# Install dependencies
+pnpm install
+```
+
+### Environment Setup
+
+For deploying to testnet or mainnet, create a `.env` file in the project root:
+
+```shell
+# Private key for deployment (required for testnet/mainnet)
+PRIVATE_KEY=your_private_key_here
+
+# Optional: Override localnet URL (defaults to http://localhost:8545)
+LOCALNET_URL=http://localhost:8545
+```
+
+**Note**: The `.env` file is gitignored. Never commit private keys to version control.
+
+### Localnet Setup
+
+To run tests locally, start a Sapphire localnet node:
+
+```shell
+docker run -it -p8544-8548:8544-8548 ghcr.io/oasisprotocol/sapphire-localnet
+```
+
+The localnet uses the standard Hardhat test mnemonic and runs on `http://localhost:8545` by default.
+
+### Network Configuration
+
+The project is configured for three networks:
+
+- **sapphire-localnet** (chainId: 0x5afd / 23293): Local development network
+- **sapphire-testnet** (chainId: 0x5aff): Oasis Sapphire testnet
+- **sapphire** (chainId: 0x5afe): Oasis Sapphire mainnet
+
+Network URLs and chain IDs are configured in `hardhat.config.ts`.
+
+### Contract Structure
+
+```
+contracts/
+├── interfaces/
+│   └── IERC7943.sol          # ERC-7943 interface definitions
+├── uRWA20.sol                 # ERC-20 implementation with ERC-7943
+├── uRWA721.sol                # ERC-721 implementation with ERC-7943
+└── uRWA1155.sol               # ERC-1155 implementation with ERC-7943
+```
+
+All contracts use OpenZeppelin's `AccessControlEnumerable` for role-based access control with the following roles:
+- `MINTER_ROLE`: Can mint new tokens
+- `BURNER_ROLE`: Can burn tokens
+- `FREEZING_ROLE`: Can freeze/unfreeze tokens
+- `WHITELIST_ROLE`: Can manage whitelist
+- `FORCE_TRANSFER_ROLE`: Can perform forced transfers
 
 ### Common Tasks
 
 ```shell
 # Run tests
-npx hardhat test
+pnpm test
 
 # Run tests with gas reporting
-REPORT_GAS=true npx hardhat test
+REPORT_GAS=true pnpm test
 
-# Deploy contracts
-npx hardhat ignition deploy ./ignition/modules/Lock.ts
+# Deploy contracts (localnet)
+pnpm deploy:localnet
+
+# Deploy contracts (testnet)
+pnpm deploy:testnet
+
+# Deploy contracts (mainnet)
+pnpm deploy:mainnet
+
+# Compile contracts
+pnpm compile
 
 # Get help
-npx hardhat help
+pnpm hardhat help
 ```
+
+## Specification
+
+The full ERC-7943 specification is available in [`EIP-7943.md`](./EIP-7943.md) in this repository.
 
 ## Reference Documentation
 
 - [EIP-7943 Specification](https://eips.ethereum.org/EIPS/eip-7943)
+- [Local EIP-7943 Specification](./EIP-7943.md)
 - [Oasis Sapphire Documentation](https://docs.oasis.io/dapp/sapphire/)
+- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
