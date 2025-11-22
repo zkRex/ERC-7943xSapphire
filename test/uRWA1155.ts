@@ -170,13 +170,11 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -212,13 +210,11 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -274,13 +270,11 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -327,13 +321,11 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -355,13 +347,11 @@ describe("uRWA1155", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await waitForTx(hash1, publicClient);
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTx(hash2, publicClient);
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
