@@ -1,35 +1,35 @@
 import { task } from "hardhat/config";
 
 task("deploy").setAction(async (_args, hre) => {
-  const Vigil = await hre.ethers.getContractFactory("Vigil");
-  const vigil = await Vigil.deploy();
-  const vigilAddr = await vigil.waitForDeployment();
+  const vigil = await hre.viem.deployContract("Vigil");
 
-  console.log(`Vigil address: ${vigilAddr.target}`);
-  return vigilAddr.target;
+  console.log(`Vigil address: ${vigil.address}`);
+  return vigil.address;
 });
 
 task("create-secret")
   .addParam("address", "contract address")
   .setAction(async (args, hre) => {
-    const vigil = await hre.ethers.getContractAt("Vigil", args.address);
+    const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`);
+    const publicClient = await hre.viem.getPublicClient();
 
-    const tx = await vigil.createSecret(
+    const hash = await vigil.write.createSecret([
       "ingredient",
-      30 /* seconds */,
+      30n /* seconds */,
       Buffer.from("brussels sprouts"),
-    );
-    console.log("Storing a secret in", tx.hash);
+    ]);
+    console.log("Storing a secret in", hash);
+    await publicClient.waitForTransactionReceipt({ hash });
   });
 
 task("check-secret")
   .addParam("address", "contract address")
   .setAction(async (args, hre) => {
-    const vigil = await hre.ethers.getContractAt("Vigil", args.address);
+    const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`);
 
     try {
       console.log("Checking the secret");
-      await vigil.revealSecret(0);
+      await vigil.read.revealSecret([0n]);
       console.log("Uh oh. The secret was available!");
       process.exit(1);
     } catch (e: any) {
@@ -39,10 +39,10 @@ task("check-secret")
 
     await new Promise((resolve) => setTimeout(resolve, 30_000));
     console.log("Checking the secret again");
-    const secret = await vigil.revealSecret.staticCallResult(0); // Get the value.
+    const secret = await vigil.read.revealSecret([0n]);
     console.log(
       "The secret ingredient is",
-      Buffer.from(secret[0].slice(2), "hex").toString(),
+      Buffer.from(secret.slice(2), "hex").toString(),
     );
   });
 

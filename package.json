@@ -2,6 +2,7 @@
   "name": "quickstart",
   "version": "1.0.0",
   "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^4.0.3",
     "@nomicfoundation/hardhat-ignition": "^0.15.15",
     "@nomicfoundation/hardhat-ignition-viem": "^0.15.15",
     "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
@@ -15,6 +16,7 @@
     "@types/node": "^24.10.1",
     "chai": "^4.5.0",
     "dotenv": "^17.2.3",
+    "ethers": "^6.15.0",
     "hardhat": "^2.27.0",
     "hardhat-gas-reporter": "^2.3.0",
     "solidity-coverage": "^0.8.16",
