@@ -139,7 +139,7 @@ describe("uRWA20", function () {
         tokenAsOther.write.changeWhitelist([
           getAddress(thirdAccount.account.address),
           true,
-        ])
+        ]).then((txHash) => waitForTx(txHash, publicClient))
       ).to.be.rejected;
     });
   });
@@ -176,7 +176,7 @@ describe("uRWA20", function () {
         token.write.mint([
           getAddress(otherAccount.account.address),
           parseEther("100"),
-        ])
+        ]).then((txHash: `0x${string}`) => waitForTx(txHash, publicClient))
       ).to.be.rejected;
     });
 
@@ -203,9 +203,9 @@ describe("uRWA20", function () {
         tokenAsOther.write.mint([
           getAddress(thirdAccount.account.address),
           parseEther("100"),
-        ])
+        ]).then((txHash) => waitForTx(txHash, publicClient))
       ).to.be.rejected;
-    });
+    }).timeout(60000);
   });
 
   describe("burn", function () {
