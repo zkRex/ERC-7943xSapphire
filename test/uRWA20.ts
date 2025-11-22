@@ -491,13 +491,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
+      await waitForTx(hash1, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
       
       await expect(
         token.write.forcedTransfer([
@@ -515,19 +515,17 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       expect(await token.read.canTransfer([
         getAddress(owner.account.address),
@@ -541,25 +539,23 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash1 });
-
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+      await waitForTxs([hash1, hash2], publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
         parseEther("100"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForTx(mintHash, publicClient);
 
       const freezeHash = await token.write.setFrozenTokens([
         getAddress(owner.account.address),
         parseEther("60"),
       ]);
-      await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+      await waitForTx(freezeHash, publicClient);
 
       expect(await token.read.canTransfer([
         getAddress(owner.account.address),
