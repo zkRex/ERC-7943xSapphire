@@ -80,6 +80,18 @@ docker run -it -p8544-8548:8544-8548 ghcr.io/oasisprotocol/sapphire-localnet
 
 The localnet uses the standard Hardhat test mnemonic and runs on `http://localhost:8545` by default.
 
+**Note for Apple Silicon users**: If you encounter difficulties running the Docker image on Apple Silicon (M1/M2/M3), it's recommended to run the localnet on a remote server and use SSH port forwarding:
+
+```shell
+# On your local machine, forward ports to the remote server
+ssh -L 8545:localhost:8545 -L 8546:localhost:8546 -L 8547:localhost:8547 -L 8548:localhost:8548 user@remote-server
+
+# On the remote server, run the Docker container
+docker run -it -p8544-8548:8544-8548 ghcr.io/oasisprotocol/sapphire-localnet
+```
+
+Then configure your `LOCALNET_URL` environment variable or use the default `http://localhost:8545` which will be forwarded to the remote server.
+
 ### Network Configuration
 
 The project is configured for three networks:
