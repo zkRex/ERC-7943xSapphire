@@ -127,6 +127,10 @@ describe("uRWA20", function () {
     });
 
     it("Should revert when called by non-whitelist role", async function () {
+      // Verify otherAccount does not have WHITELIST_ROLE
+      const whitelistRole = await token.read.WHITELIST_ROLE();
+      expect(await token.read.hasRole([whitelistRole, getAddress(otherAccount.account.address)])).to.be.false;
+      
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
       
@@ -164,6 +168,9 @@ describe("uRWA20", function () {
       ]);
       await publicClient.waitForTransactionReceipt({ hash });
       
+      // Verify account is not whitelisted
+      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      
       await expect(
         token.write.mint([
           getAddress(otherAccount.account.address),
@@ -185,6 +192,10 @@ describe("uRWA20", function () {
       ]);
       await publicClient.waitForTransactionReceipt({ hash: hash2 });
 
+      // Verify otherAccount does NOT have MINTER_ROLE
+      const minterRole = await token.read.MINTER_ROLE();
+      expect(await token.read.hasRole([minterRole, getAddress(otherAccount.account.address)])).to.be.false;
+      
       // otherAccount does NOT have MINTER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
@@ -231,6 +242,10 @@ describe("uRWA20", function () {
       ]);
       await publicClient.waitForTransactionReceipt({ hash: mintHash });
 
+      // Verify otherAccount does NOT have BURNER_ROLE
+      const burnerRole = await token.read.BURNER_ROLE();
+      expect(await token.read.hasRole([burnerRole, getAddress(otherAccount.account.address)])).to.be.false;
+      
       // otherAccount does NOT have BURNER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
@@ -265,6 +280,10 @@ describe("uRWA20", function () {
     });
 
     it("Should revert when called by non-freezing role", async function () {
+      // Verify otherAccount does NOT have FREEZING_ROLE
+      const freezingRole = await token.read.FREEZING_ROLE();
+      expect(await token.read.hasRole([freezingRole, getAddress(otherAccount.account.address)])).to.be.false;
+      
       // otherAccount does NOT have FREEZING_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
@@ -396,6 +415,17 @@ describe("uRWA20", function () {
         parseEther("60"),
       ]);
       await publicClient.waitForTransactionReceipt({ hash: freezeHash });
+
+      // Verify frozen tokens
+      expect(await token.read.getFrozenTokens([getAddress(owner.account.address)])).to.equal(parseEther("60"));
+      expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("100"));
+      
+      // Verify canTransfer returns false
+      expect(await token.read.canTransfer([
+        getAddress(owner.account.address),
+        getAddress(otherAccount.account.address),
+        parseEther("50"),
+      ])).to.be.false;
 
       const config = { client: { public: publicClient, wallet: owner } };
       const tokenAsOwner = await hre.viem.getContractAt("uRWA20", token.address, config);
