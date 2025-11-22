@@ -1,6 +1,13 @@
 {
   "name": "quickstart",
   "version": "1.0.0",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:localnet": "hardhat ignition deploy ignition/modules/Lock.ts --network sapphire-localnet",
+    "deploy:testnet": "hardhat ignition deploy ignition/modules/Lock.ts --network sapphire-testnet",
+    "deploy:mainnet": "hardhat ignition deploy ignition/modules/Lock.ts --network sapphire"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.3",
     "@nomicfoundation/hardhat-ignition": "^0.15.15",
