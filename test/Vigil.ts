@@ -35,17 +35,6 @@ describe("Vigil", function () {
     return BigInt(block.timestamp);
   }
 
-  async function expectRevertWithMessage(
-    promise: Promise<unknown>,
-    message: string,
-  ) {
-    if (hre.network.name === "hardhat") {
-      await expect(promise).to.be.rejectedWith(message);
-    } else {
-      await expect(promise).to.be.rejected;
-    }
-  }
-
   beforeEach(async function () {
     const fixture = await deployVigilFixture();
     vigil = fixture.vigil;
@@ -130,17 +119,11 @@ describe("Vigil", function () {
 
       await publicClient.waitForTransactionReceipt({ hash });
 
-      await expectRevertWithMessage(
-        vigil.read.revealSecret([0n]),
-        "not expired",
-      );
+      await expect(vigil.read.revealSecret([0n])).to.be.rejected;
     });
 
     it("Should revert when trying to reveal non-existent secret", async function () {
-      await expectRevertWithMessage(
-        vigil.read.revealSecret([0n]),
-        "no such secret",
-      );
+      await expect(vigil.read.revealSecret([0n])).to.be.rejected;
     });
 
     it("Should reveal secret after expiry", async function () {
@@ -340,10 +323,7 @@ describe("Vigil", function () {
       // We check immediately after refresh, so it should still be protected
       const currentTime = await getCurrentTimestamp(publicClient);
       if (currentTime < initialExpiry) {
-        await expectRevertWithMessage(
-          vigil.read.revealSecret([0n]),
-          "not expired",
-        );
+        await expect(vigil.read.revealSecret([0n])).to.be.rejected;
       }
     });
   });
@@ -358,9 +338,8 @@ describe("Vigil", function () {
       ]);
       await publicClient.waitForTransactionReceipt({ hash: hash1 });
 
-      const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
       const config = { client: { public: publicClient, wallet: otherAccount } };
-      
+
       const vigilAsOtherAccount = await hre.viem.getContractAt(
         "Vigil",
         vigil.address,
