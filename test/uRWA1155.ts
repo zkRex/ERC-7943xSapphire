@@ -89,6 +89,13 @@ describe("uRWA1155", function () {
     });
 
     it("Should revert when minting to non-whitelisted account", async function () {
+      // Ensure otherAccount is NOT whitelisted
+      const hash = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        false,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash });
+      
       await expect(
         token.write.mint([
           getAddress(otherAccount.account.address),
@@ -284,10 +291,11 @@ describe("uRWA1155", function () {
         1n,
       ])).to.equal(parseEther("50"));
       // Frozen tokens should be reduced since we transferred from frozen balance
+      // Unfrozen was 40, we transferred 50, so we took 10 from frozen: 60 - 10 = 50
       expect(await token.read.getFrozenTokens([
         getAddress(owner.account.address),
         1n,
-      ])).to.equal(parseEther("10"));
+      ])).to.equal(parseEther("50"));
     });
   });
 
