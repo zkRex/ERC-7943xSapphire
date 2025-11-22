@@ -13,10 +13,11 @@ task("create-secret")
     const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`);
     const publicClient = await hre.viem.getPublicClient();
 
+    const secretBytes = Buffer.from("brussels sprouts");
     const hash = await vigil.write.createSecret([
       "ingredient",
       30n /* seconds */,
-      Buffer.from("brussels sprouts"),
+      `0x${secretBytes.toString("hex")}` as `0x${string}`,
     ]);
     console.log("Storing a secret in", hash);
     await publicClient.waitForTransactionReceipt({ hash });
