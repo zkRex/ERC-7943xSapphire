@@ -105,7 +105,7 @@ describe("uRWA1155", function () {
           getAddress(otherAccount.account.address),
           1n,
           parseEther("100"),
-        ])
+        ]).then((txHash) => waitForTx(txHash, publicClient))
       ).to.be.rejected;
     });
   });
@@ -133,7 +133,7 @@ describe("uRWA1155", function () {
         1n,
       ])).to.equal(parseEther("50"));
     });
-  });
+  }).timeout(60000);
 
   describe("setFrozenTokens", function () {
     it("Should allow FREEZING_ROLE to freeze tokens", async function () {

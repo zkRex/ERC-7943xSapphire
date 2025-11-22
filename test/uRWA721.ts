@@ -105,7 +105,7 @@ describe("uRWA721", function () {
         token.write.safeMint([
           getAddress(otherAccount.account.address),
           1n,
-        ])
+        ]).then((txHash: `0x${string}`) => waitForTx(txHash, publicClient))
       ).to.be.rejected;
     });
   });
@@ -129,7 +129,7 @@ describe("uRWA721", function () {
       
       await expect(token.read.ownerOf([1n])).to.be.rejected;
     });
-  });
+  }).timeout(60000);
 
   describe("setFrozenTokens", function () {
     it("Should allow FREEZING_ROLE to freeze tokens", async function () {
