@@ -157,6 +157,13 @@ describe("uRWA20", function () {
     });
 
     it("Should revert when minting to non-whitelisted account", async function () {
+      // Ensure otherAccount is NOT whitelisted
+      const hash = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        false,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash });
+      
       await expect(
         token.write.mint([
           getAddress(otherAccount.account.address),
@@ -166,12 +173,19 @@ describe("uRWA20", function () {
     });
 
     it("Should revert when called by non-minter role", async function () {
-      const hash = await token.write.changeWhitelist([
+      const hash1 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await publicClient.waitForTransactionReceipt({ hash });
+      await publicClient.waitForTransactionReceipt({ hash: hash1 });
 
+      const hash2 = await token.write.changeWhitelist([
+        getAddress(thirdAccount.account.address),
+        true,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash: hash2 });
+
+      // otherAccount does NOT have MINTER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
       
@@ -217,6 +231,7 @@ describe("uRWA20", function () {
       ]);
       await publicClient.waitForTransactionReceipt({ hash: mintHash });
 
+      // otherAccount does NOT have BURNER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
       
