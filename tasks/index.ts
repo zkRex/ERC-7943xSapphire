@@ -1,7 +1,16 @@
 import { task } from "hardhat/config";
+import { sapphireLocalnetChain } from "../hardhat.config";
 
 task("deploy").setAction(async (_args, hre) => {
-  const vigil = await hre.viem.deployContract("Vigil");
+  const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+  let config;
+  if (chain) {
+    const [walletClient] = await hre.viem.getWalletClients({ chain });
+    const publicClient = await hre.viem.getPublicClient({ chain });
+    config = { client: { public: publicClient, wallet: walletClient } };
+  }
+  
+  const vigil = await hre.viem.deployContract("Vigil", [], config);
 
   console.log(`Vigil address: ${vigil.address}`);
   return vigil.address;
@@ -10,8 +19,17 @@ task("deploy").setAction(async (_args, hre) => {
 task("create-secret")
   .addParam("address", "contract address")
   .setAction(async (args, hre) => {
-    const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`);
-    const publicClient = await hre.viem.getPublicClient();
+    const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+    let config;
+    let publicClient;
+    if (chain) {
+      const [walletClient] = await hre.viem.getWalletClients({ chain });
+      publicClient = await hre.viem.getPublicClient({ chain });
+      config = { client: { public: publicClient, wallet: walletClient } };
+    } else {
+      publicClient = await hre.viem.getPublicClient();
+    }
+    const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`, config);
 
     const secretBytes = Buffer.from("brussels sprouts");
     const hash = await vigil.write.createSecret([
@@ -26,7 +44,14 @@ task("create-secret")
 task("check-secret")
   .addParam("address", "contract address")
   .setAction(async (args, hre) => {
-    const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`);
+    const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+    let config;
+    if (chain) {
+      const [walletClient] = await hre.viem.getWalletClients({ chain });
+      const publicClient = await hre.viem.getPublicClient({ chain });
+      config = { client: { public: publicClient, wallet: walletClient } };
+    }
+    const vigil = await hre.viem.getContractAt("Vigil", args.address as `0x${string}`, config);
 
     try {
       console.log("Checking the secret");
