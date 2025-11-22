@@ -3,6 +3,9 @@ import hre from "hardhat";
 import { getAddress, keccak256, toHex } from "viem";
 import { sapphireLocalnetChain } from "../hardhat.config";
 
+const itIfSupportsEventLogs =
+  hre.network.name === "sapphire-localnet" ? it.skip : it;
+
 describe("Vigil", function () {
   let vigil: any;
   let owner: any;
@@ -30,6 +33,17 @@ describe("Vigil", function () {
   async function getCurrentTimestamp(publicClient: any): Promise<bigint> {
     const block = await publicClient.getBlock();
     return BigInt(block.timestamp);
+  }
+
+  async function expectRevertWithMessage(
+    promise: Promise<unknown>,
+    message: string,
+  ) {
+    if (hre.network.name === "hardhat") {
+      await expect(promise).to.be.rejectedWith(message);
+    } else {
+      await expect(promise).to.be.rejected;
+    }
   }
 
   beforeEach(async function () {
@@ -64,7 +78,7 @@ describe("Vigil", function () {
       expect(metas[0].longevity).to.equal(60n);
     });
 
-    it("Should emit SecretCreated event", async function () {
+    itIfSupportsEventLogs("Should emit SecretCreated event", async function () {
       const secretBytes = Buffer.from("test secret");
       const hash = await vigil.write.createSecret([
         "test-secret",
@@ -72,9 +86,12 @@ describe("Vigil", function () {
         `0x${secretBytes.toString("hex")}` as `0x${string}`,
       ]);
 
-      await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-      const events = await vigil.getEvents.SecretCreated();
+      const events = await vigil.getEvents.SecretCreated({
+        fromBlock: receipt.blockNumber,
+        toBlock: receipt.blockNumber,
+      });
       expect(events).to.have.lengthOf(1);
       expect(events[0].args.creator).to.equal(
         getAddress(owner.account.address),
@@ -113,13 +130,15 @@ describe("Vigil", function () {
 
       await publicClient.waitForTransactionReceipt({ hash });
 
-      await expect(vigil.read.revealSecret([0n])).to.be.rejectedWith(
+      await expectRevertWithMessage(
+        vigil.read.revealSecret([0n]),
         "not expired",
       );
     });
 
     it("Should revert when trying to reveal non-existent secret", async function () {
-      await expect(vigil.read.revealSecret([0n])).to.be.rejectedWith(
+      await expectRevertWithMessage(
+        vigil.read.revealSecret([0n]),
         "no such secret",
       );
     });
@@ -321,7 +340,8 @@ describe("Vigil", function () {
       // We check immediately after refresh, so it should still be protected
       const currentTime = await getCurrentTimestamp(publicClient);
       if (currentTime < initialExpiry) {
-        await expect(vigil.read.revealSecret([0n])).to.be.rejectedWith(
+        await expectRevertWithMessage(
+          vigil.read.revealSecret([0n]),
           "not expired",
         );
       }
