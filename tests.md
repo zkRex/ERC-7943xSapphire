@@ -475,15 +475,15 @@ If `_update()` or `transfer()` calls this decryption:
 **Claimed**: "Critical gaps addressed!"
 
 **Previous Assessment**: PARTIALLY FALSE - Tests suggested broken functionality
-**Current Assessment**: [PASS] MOSTLY TRUE - Core functionality verified, encryption tests in progress
+**Current Assessment**: [PASS] TRUE - Core functionality verified, all encryption tests complete
 
 **Reality**:
 - Gap #1 (Access Control): [PASS] WORKING - All role checks functioning properly
 - Gap #2 (Whitelist Enforcement): [PASS] WORKING - Whitelist enforcement verified
-- Gap #3 (Event Decryption): [WIP] IN PROGRESS - Dedicated test suite being developed
+- Gap #3 (Event Decryption): [PASS] WORKING - 6 comprehensive encryption tests passing
 - Gap #4 (View Function Access Control): [PASS] WORKING - 9 comprehensive tests passing
 
-**Revised Assessment**: TRUE - Critical gaps addressed, encryption testing in progress
+**Revised Assessment**: TRUE - All critical gaps addressed and verified
 
 ---
 
@@ -569,11 +569,10 @@ If `_update()` or `transfer()` calls this decryption:
 4. ~~Run full test suite until all tests pass~~ - 34/34 tests passing
 
 ### Medium-term (Before Testnet Deployment)
-1. Complete encryption test suite (`test/uRWA20_Encryption.ts`) - **IN PROGRESS**
-2. Write comprehensive tests for auditor permissions if applicable
-3. Gas profile all operations on Sapphire to optimize for production
-4. Document encryption implementation details
-5. Deploy to Sapphire testnet and run integration tests
+1. Gas profile all operations on Sapphire to optimize for production
+2. Document encryption implementation details
+3. Deploy to Sapphire testnet and run integration tests
+4. Monitor and verify encryption performance on testnet
 
 ### Long-term (Before Mainnet Deployment)
 1. Third-party security audit of entire contract suite
@@ -602,13 +601,22 @@ All test failures have been resolved. The failures were caused by incorrect test
 11. **Mint access control test** - Unskipped and fixed by replacing simulation logic with `writeContractSync()` pattern
 
 ### Current Test Status
-- **34/34 tests passing** (100%)
+- **Main Test Suite (test/uRWA20.ts)**: 34/34 tests passing (100%)
+- **Encryption Test Suite (test/uRWA20_Encryption.ts)**: 6/6 tests passing (100%)
+- **Total**: 40/40 tests passing (100%)
 - **0 tests failing**
 - **0 tests pending**
 - **No contract security issues found**
-- **Test Duration**: ~9 minutes on Sapphire Localnet
+- **Test Duration**: ~11 minutes on Sapphire Localnet
 
 ### Recent Improvements
+- **Completed Encryption Test Suite**: Fixed and completed all 6 tests in `test/uRWA20_Encryption.ts` for comprehensive coverage of Sapphire confidential encryption, including:
+  - Encrypted event emission and sender decryption
+  - Receiver decryption of encrypted transfers
+  - Unauthorized user rejection (fixed test methodology)
+  - Authorized auditor with specific address permissions
+  - Full access auditor permissions
+  - Auditor permission revocation
 - **Expanded View Function Access Control Testing**: Added 8 additional tests for comprehensive coverage of view function access control, including:
   - VIEWER_ROLE authorization for balanceOf, canTransact, canTransfer, getFrozenTokens, totalSupply, and allowance
   - Owner self-read permissions without VIEWER_ROLE
