@@ -190,15 +190,13 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     function forcedTransfer(address from, address to, uint256 amount) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(from != address(0) && to != address(0), NotZeroAddress());
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        require(_balances[from] >= amount, ERC20InsufficientBalance(from, _balances[from], amount));
+        uint256 fromBalance = super.balanceOf(from);
+        require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
         _excessFrozenUpdate(from, amount);
         
-        // Update balances directly without calling super._update() to avoid emitting Transfer events
-        // This preserves privacy by only emitting encrypted events
-        unchecked {
-            _balances[from] -= amount;
-            _balances[to] += amount;
-        }
+        // Use super._update() to update balances (will emit Transfer events, but balances must be updated)
+        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
+        super._update(from, to, amount);
         
         // Encrypt sensitive event data
         bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
@@ -241,8 +239,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-20 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
-    /// Updates balances directly without emitting standard Transfer events to protect privacy.
-    /// Only emits encrypted events using Sapphire precompiles.
+    /// Calls super._update() to handle balance updates (will emit standard Transfer events).
+    /// Also emits encrypted events using Sapphire precompiles for additional privacy.
     /// Reverts with {ERC7943InsufficientUnfrozenBalance} | {ERC7943CannotTransact} if any `canTransfer` check fails.
     /// @param from The address sending tokens (zero address for minting).
     /// @param to The address receiving tokens (zero address for burning).
@@ -253,7 +251,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bool isBurn = (to == address(0));
         
         if (isTransfer) { // Transfer
-            uint256 fromBalance = _balances[from];
+            uint256 fromBalance = super.balanceOf(from);
             require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
             uint256 unfrozenFromBalance = _unfrozenBalance(from);
             require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
@@ -265,30 +263,9 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
             _excessFrozenUpdate(from, amount);
         }
 
-        // Update balances directly without calling super._update() to avoid emitting Transfer events
-        // This preserves privacy by only emitting encrypted events
-        if (from != address(0)) {
-            unchecked {
-                _balances[from] -= amount;
-            }
-        }
-
-        if (to != address(0)) {
-            unchecked {
-                _balances[to] += amount;
-            }
-        }
-
-        // Update total supply for mints and burns
-        if (isMint) {
-            unchecked {
-                _totalSupply += amount;
-            }
-        } else if (isBurn) {
-            unchecked {
-                _totalSupply -= amount;
-            }
-        }
+        // Call super._update() to handle balance and totalSupply updates (will emit standard Transfer events)
+        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
+        super._update(from, to, amount);
         
         // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
