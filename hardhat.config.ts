@@ -7,8 +7,14 @@ import { defineChain } from "viem";
 
 dotenv.config();
 
-// Accounts for mainnet/testnet (from environment variable)
-const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [];
+// Accounts for mainnet/testnet (from environment variables)
+const accounts = process.env.PRIVATE_KEY
+  ? [
+      process.env.PRIVATE_KEY,
+      process.env.PRIVATE_KEY_2,
+      process.env.PRIVATE_KEY_3
+    ].filter(Boolean) as string[]
+  : [];
 
 // Mnemonic for localnet (standard Hardhat test mnemonic)
 // This matches the mnemonic used by sapphire-localnet
