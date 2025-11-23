@@ -303,7 +303,7 @@ describe("uRWA20", function () {
       ).to.be.rejected;
     });
 
-    it.skip("Should revert when called by non-minter role", async function () {
+    it("Should revert when called by non-minter role", async function () {
       const hash1 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
@@ -319,29 +319,22 @@ describe("uRWA20", function () {
       // Verify otherAccount does NOT have MINTER_ROLE
       const minterRole = await token.read.MINTER_ROLE();
       expect(await token.read.hasRole([minterRole, getAddress(otherAccount.account.address)])).to.be.false;
-      
-      // otherAccount does NOT have MINTER_ROLE, so this should revert
-      const config = { client: { public: publicClient, wallet: otherAccount } };
-      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
-      // Try to simulate the transaction - it should revert due to missing role
-      let simulationSucceeded = false;
-      try {
-        await tokenAsOther.simulate.mint([
-          getAddress(thirdAccount.account.address),
-          parseEther("100"),
-        ]);
-        simulationSucceeded = true;
-      } catch (error: any) {
-        // Expected - transaction should revert
-        expect(error).to.exist;
-      }
-      
-      // If simulation didn't throw, the test should fail
-      if (simulationSucceeded) {
-        throw new Error("Expected transaction to revert but simulation succeeded");
-      }
-    }).timeout(120000);
+
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
+      await expect(
+        otherAccount.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'mint',
+          args: [
+            getAddress(thirdAccount.account.address),
+            parseEther("100"),
+          ],
+          throwOnReceiptRevert: true
+        })
+      ).to.be.rejected;
+    });
   });
 
   describe("burn", function () {
@@ -631,15 +624,20 @@ describe("uRWA20", function () {
     });
 
     it("Should revert when called by non-force-transfer role", async function () {
-      const config = { client: { public: publicClient, wallet: otherAccount } };
-      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        tokenAsOther.write.forcedTransfer([
-          getAddress(owner.account.address),
-          getAddress(thirdAccount.account.address),
-          parseEther("50"),
-        ])
+        otherAccount.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'forcedTransfer',
+          args: [
+            getAddress(owner.account.address),
+            getAddress(thirdAccount.account.address),
+            parseEther("50"),
+          ],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
 
@@ -655,13 +653,21 @@ describe("uRWA20", function () {
         parseEther("100"),
       ]);
       await waitForTx(mintHash, publicClient);
-      
+
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        token.write.forcedTransfer([
-          getAddress(owner.account.address),
-          getAddress(otherAccount.account.address),
-          parseEther("50"),
-        ])
+        owner.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'forcedTransfer',
+          args: [
+            getAddress(owner.account.address),
+            getAddress(otherAccount.account.address),
+            parseEther("50"),
+          ],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
   });
