@@ -485,7 +485,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @return action The action type (e.g., "transfer", "mint", "burn").
     /// @return timestamp The timestamp of the event.
     /// @return nonce The nonce used for encryption.
-    function viewLastDecryptedData() external view returns (
+    function viewLastDecryptedData(bytes memory token) external view returns (
         address from,
         address to,
         uint256 amount,
@@ -493,8 +493,9 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         uint256 timestamp,
         uint256 nonce
     ) {
-        require(_lastDecryptedData[msg.sender].exists, "No decrypted data");
-        DecryptedTransferData memory data = _lastDecryptedData[msg.sender];
+        address caller = _getAuthenticatedCaller(token);
+        require(_lastDecryptedData[caller].exists, "No decrypted data");
+        DecryptedTransferData memory data = _lastDecryptedData[caller];
         return (data.from, data.to, data.amount, data.action, data.timestamp, data.nonce);
     }
 

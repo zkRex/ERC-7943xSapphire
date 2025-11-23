@@ -1,8 +1,10 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther, keccak256, encodePacked, decodeEventLog } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked, decodeEventLog, hexToSignature, Hex } from "viem";
+import { readContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx } from "./utils";
+import { SiweMessage } from "siwe";
 
 describe("uRWA20 Encryption & Auditing", function () {
     const isLocalNetwork = hre.network.name === "sapphire-localnet" || hre.network.name === "hardhat";
@@ -14,6 +16,64 @@ describe("uRWA20 Encryption & Auditing", function () {
     let user2: any;
     let auditor: any;
     let publicClient: any;
+
+    const sessionTokens = new Map<string, string>();
+
+    async function loginAndGetToken(
+        tokenContract: any,
+        walletClient: any,
+        chainId: number
+    ): Promise<string> {
+        const address = getAddress(walletClient.account.address);
+
+        if (sessionTokens.has(address)) {
+            return sessionTokens.get(address)!;
+        }
+
+        const domain = await tokenContract.read.domain();
+
+        const siweMsg = new SiweMessage({
+            domain,
+            address,
+            uri: `http://${domain}`,
+            version: "1",
+            chainId,
+            statement: "Sign in to access uRWA20 token",
+            issuedAt: new Date().toISOString(),
+        });
+
+        const message = siweMsg.prepareMessage();
+
+        const signatureHex = await walletClient.signMessage({
+            message
+        }) as Hex;
+
+        const sig = hexToSignature(signatureHex);
+
+        const token = await tokenContract.read.login([message, sig]);
+
+        sessionTokens.set(address, token);
+
+        return token;
+    }
+
+    async function readDecryptedData(walletClient: any) {
+        if (hre.network.name === "sapphire-localnet") {
+            const sessionToken = await loginAndGetToken(token, walletClient, sapphireLocalnetChain.id);
+            const abi = await hre.artifacts.readArtifact("uRWA20");
+            return readContract(walletClient, {
+                address: token.address,
+                abi: abi.abi,
+                functionName: "viewLastDecryptedData",
+                args: [sessionToken],
+                account: walletClient.account
+            } as any);
+        } else {
+            const config = { client: { public: publicClient, wallet: walletClient } };
+            const tokenAsWallet = await hre.viem.getContractAt("uRWA20", token.address, config);
+            return tokenAsWallet.read.viewLastDecryptedData(["0x"]);
+        }
+    }
 
     async function deployTokenFixture() {
         const useSapphireLocalnet = hre.network.name === "sapphire-localnet";
@@ -120,7 +180,7 @@ describe("uRWA20 Encryption & Auditing", function () {
             await waitForTx(decryptHash, publicClient);
 
             // Check decrypted data
-            const data = await tokenAsUser1.read.viewLastDecryptedData();
+            const data = await readDecryptedData(user1);
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address)); // from
             expect(getAddress(data[1])).to.equal(getAddress(user2.account.address)); // to
             expect(data[2]).to.equal(parseEther("10")); // amount
@@ -156,7 +216,7 @@ describe("uRWA20 Encryption & Auditing", function () {
             const decryptHash = await tokenAsUser2.write.processDecryption([encryptedData]);
             await waitForTx(decryptHash, publicClient);
 
-            const data = await tokenAsUser2.read.viewLastDecryptedData();
+            const data = await readDecryptedData(user2);
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address));
             expect(getAddress(data[1])).to.equal(getAddress(user2.account.address));
             expect(data[2]).to.equal(parseEther("10"));
