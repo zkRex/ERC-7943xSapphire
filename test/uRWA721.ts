@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress } from "viem";
+import { getAddress, keccak256, encodePacked } from "viem";
+import { readContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
 
@@ -14,6 +15,30 @@ describe("uRWA721", function () {
   let thirdAccount: any;
   let publicClient: any;
 
+  // Helper to read from contract with signed queries on Sapphire
+  // On Sapphire, view calls must be signed to have a non-zero msg.sender.
+  // Viem's contract.read.* uses the public client, so we use readContract with wallet client.
+  async function readToken(
+    functionName: any,
+    args: any[] = [],
+    walletClient: any = owner
+  ): Promise<any> {
+    if (hre.network.name === "sapphire-localnet") {
+      // On Sapphire, use readContract with wallet client to sign the query
+      const abi = await hre.artifacts.readArtifact("uRWA721");
+      return readContract(walletClient, {
+        address: token.address,
+        abi: abi.abi,
+        functionName,
+        args,
+        account: walletClient.account,
+      } as any);
+    } else {
+      // For non-Sapphire networks, use regular contract.read
+      return (token.read as any)[functionName](args);
+    }
+  }
+
   async function deployTokenFixture() {
     const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
     
@@ -26,6 +51,24 @@ describe("uRWA721", function () {
       ["Test NFT", "TNFT", ownerWallet.account.address],
       config
     );
+
+    // Grant VIEWER_ROLE to all test accounts
+    // Compute VIEWER_ROLE directly: keccak256(abi.encodePacked("VIEWER_ROLE"))
+    // This matches Solidity's keccak256("VIEWER_ROLE")
+    const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
+    
+    // Grant roles sequentially to avoid potential issues
+    const hash1 = await tokenContract.write.grantRole([
+      viewerRole,
+      getAddress(otherAccountWallet.account.address),
+    ]);
+    await waitForTx(hash1, client);
+    
+    const hash2 = await tokenContract.write.grantRole([
+      viewerRole,
+      getAddress(thirdAccountWallet.account.address),
+    ]);
+    await waitForTx(hash2, client);
 
     return {
       token: tokenContract,
@@ -52,14 +95,14 @@ describe("uRWA721", function () {
     });
 
     it("Should have correct name and symbol", async function () {
-      expect(await token.read.name()).to.equal("Test NFT");
-      expect(await token.read.symbol()).to.equal("TNFT");
+      expect(await readToken("name", [])).to.equal("Test NFT");
+      expect(await readToken("symbol", [])).to.equal("TNFT");
     });
   });
 
   describe("canTransact", function () {
     it("Should return false for non-whitelisted account", async function () {
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
     });
 
     it("Should return true for whitelisted account", async function () {
@@ -69,7 +112,7 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(hash, publicClient);
       
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.true;
     });
   });
 
@@ -87,7 +130,7 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(mintHash, publicClient);
       
-      expect(await token.read.ownerOf([1n])).to.equal(getAddress(otherAccount.account.address));
+      expect(await readToken("ownerOf", [1n])).to.equal(getAddress(otherAccount.account.address));
     });
 
     it("Should revert when minting to non-whitelisted account", async function () {
@@ -99,7 +142,7 @@ describe("uRWA721", function () {
       await waitForTx(hash, publicClient);
       
       // Verify account is not whitelisted
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
       
       // Use simulateContract to check if it would revert
       await expect(
@@ -128,7 +171,7 @@ describe("uRWA721", function () {
       const burnHash = await token.write.burn([1n]);
       await waitForTx(burnHash, publicClient);
       
-      await expect(token.read.ownerOf([1n])).to.be.rejected;
+      await expect(readToken("ownerOf", [1n])).to.be.rejected;
     });
   }).timeout(60000);
 
