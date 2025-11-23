@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked } from "viem";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
 
@@ -30,16 +30,22 @@ describe("uRWA20", function () {
     );
 
     // Grant VIEWER_ROLE to all test accounts
-    const viewerRole = await tokenContract.read.VIEWER_ROLE();
+    // Compute VIEWER_ROLE directly: keccak256(abi.encodePacked("VIEWER_ROLE"))
+    // This matches Solidity's keccak256("VIEWER_ROLE")
+    const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
+    
+    // Grant roles sequentially to avoid potential issues
     const hash1 = await tokenContract.write.grantRole([
       viewerRole,
       getAddress(otherAccountWallet.account.address),
     ]);
+    await waitForTx(hash1, client);
+    
     const hash2 = await tokenContract.write.grantRole([
       viewerRole,
       getAddress(thirdAccountWallet.account.address),
     ]);
-    await waitForTxs([hash1, hash2], client);
+    await waitForTx(hash2, client);
 
     return {
       token: tokenContract,
@@ -760,7 +766,8 @@ describe("uRWA20", function () {
       const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
       
       // If using thirdAccount, revoke VIEWER_ROLE temporarily
-      const viewerRole = await token.read.VIEWER_ROLE();
+      // Compute VIEWER_ROLE directly to avoid read call issues
+      const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
       let needsRevoke = false;
       if (unauthorizedWallet === thirdAccount) {
         const hasRole = await token.read.hasRole([viewerRole, getAddress(thirdAccount.account.address)]);
