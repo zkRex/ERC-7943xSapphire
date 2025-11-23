@@ -7,6 +7,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
+import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
 
 /// @title uRWA-20 Token Contract
 /// @notice An ERC-20 token implementation adhering to the IERC-7943 interface for Real World Assets.
@@ -18,7 +19,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant FREEZING_ROLE = keccak256("FREEZING_ROLE");
     bytes32 public constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
-    bytes32 public constant FORCE_TRANSFER_ROLE = keccak256("FORCE_TRANSFER_ROLE");    
+    bytes32 public constant FORCE_TRANSFER_ROLE = keccak256("FORCE_TRANSFER_ROLE");
+    bytes32 public constant VIEWER_ROLE = keccak256("VIEWER_ROLE");    
 
     /// @notice Mapping storing the whitelist status for each account address.
     /// @dev True indicates the account is whitelisted and allowed to interact, false otherwise.
@@ -28,9 +30,33 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @dev It gives the amount of ERC-20 tokens frozen in `account` wallet.
     mapping(address account => uint256 amount) internal _frozenTokens;
 
+    /// @notice Encryption key for encrypting sensitive event data.
+    /// @dev Generated once in constructor and used for all event encryption.
+    bytes32 internal _encryptionKey;
+
+    /// @notice Nonce counter for event encryption to ensure uniqueness.
+    uint256 internal _eventNonce;
+
+    /// @notice Emitted when an account's whitelist status is changed (encrypted).
+    /// @param encryptedData Encrypted data containing account and status.
+    event EncryptedWhitelisted(bytes encryptedData);
+
+    /// @notice Emitted when tokens are transferred (encrypted).
+    /// @param encryptedData Encrypted data containing from, to, and amount.
+    event EncryptedTransfer(bytes encryptedData);
+
+    /// @notice Emitted when tokens are frozen (encrypted).
+    /// @param encryptedData Encrypted data containing account and amount.
+    event EncryptedFrozen(bytes encryptedData);
+
+    /// @notice Emitted when a forced transfer occurs (encrypted).
+    /// @param encryptedData Encrypted data containing from, to, and amount.
+    event EncryptedForcedTransfer(bytes encryptedData);
+
     /// @notice Emitted when an account's whitelist status is changed.
     /// @param account The address whose status was changed.
     /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
+    /// @dev Deprecated: Use EncryptedWhitelisted instead. Kept for backward compatibility.
     event Whitelisted(address indexed account, bool status);
 
     /// @notice Error used when a zero address is provided where it is not allowed.
@@ -38,7 +64,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Contract constructor.
     /// @dev Initializes the ERC-20 token with name and symbol, and grants all roles
-    /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist) to the `initialAdmin`.
+    /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
+    /// Generates an encryption key for encrypting sensitive events.
     /// @param name The name of the token.
     /// @param symbol The symbol of the token.
     /// @param initialAdmin The address to receive initial administrative and operational roles.
@@ -49,10 +76,19 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         _grantRole(FREEZING_ROLE, initialAdmin);
         _grantRole(WHITELIST_ROLE, initialAdmin);
         _grantRole(FORCE_TRANSFER_ROLE, initialAdmin);
+        _grantRole(VIEWER_ROLE, initialAdmin);
+        
+        // Generate encryption key for event encryption
+        bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA20", name, symbol));
+        _encryptionKey = bytes32(randomBytes);
+        _eventNonce = 0;
     }
 
     /// @inheritdoc IERC7943Fungible
+    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransfer(address from, address to, uint256 amount) public virtual override view returns (bool allowed) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
         uint256 fromBalance = balanceOf(from);
         if (fromBalance < _frozenTokens[from]) return allowed;
         if (amount > fromBalance - _frozenTokens[from]) return allowed;
@@ -61,22 +97,63 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     }
 
     /// @inheritdoc IERC7943Fungible
+    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public virtual override view returns (bool allowed) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
         allowed = _whitelist[account] ? true : false;
     }
 
     /// @inheritdoc IERC7943Fungible
+    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function getFrozenTokens(address account) public virtual override view returns (uint256 amount) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
         amount = _frozenTokens[account];
+    }
+
+    /// @notice Returns the balance of the account.
+    /// @dev Overrides ERC20 balanceOf to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @param account The address to query the balance of.
+    /// @return The balance of the account.
+    function balanceOf(address account) public view virtual override returns (uint256) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.balanceOf(account);
+    }
+
+    /// @notice Returns the total supply of tokens.
+    /// @dev Overrides ERC20 totalSupply to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @return The total supply of tokens.
+    function totalSupply() public view virtual override returns (uint256) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.totalSupply();
+    }
+
+    /// @notice Returns the amount of tokens that an owner allowed to a spender.
+    /// @dev Overrides ERC20 allowance to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @param owner The address which owns the funds.
+    /// @param spender The address which will spend the funds.
+    /// @return The amount of tokens still available for the spender.
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.allowance(owner, spender);
     }
 
     /// @notice Updates the whitelist status for a given account.
     /// @dev Can only be called by accounts holding the `WHITELIST_ROLE`.
-    /// Emits a {Whitelisted} event.
+    /// Emits an encrypted {EncryptedWhitelisted} event to protect privacy.
     /// @param account The address whose whitelist status is to be changed.
     /// @param status The new whitelist status (true or false).
     function changeWhitelist(address account, bool status) external onlyRole(WHITELIST_ROLE) {
         _whitelist[account] = status;
+        
+        // Encrypt sensitive event data
+        bytes memory plaintext = abi.encode(account, status, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedWhitelisted(encrypted);
+        
+        // Also emit unencrypted for backward compatibility (can be removed in production)
         emit Whitelisted(account, status);
     }
 
@@ -102,7 +179,16 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @dev Can only be called by accounts holding the `FREEZING_ROLE`
     function setFrozenTokens(address account, uint256 amount) public virtual override onlyRole(FREEZING_ROLE) returns(bool result) {
         _frozenTokens[account] = amount;
+        
+        // Encrypt sensitive event data
+        bytes memory plaintext = abi.encode(account, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedFrozen(encrypted);
+        
+        // Also emit unencrypted for backward compatibility (can be removed in production)
         emit Frozen(account, amount);
+        
         result = true;
     }
 
@@ -113,19 +199,36 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         require(canTransact(to), ERC7943CannotTransact(to));
         _excessFrozenUpdate(from, amount);
         super._update(from, to, amount); // Directly update balances, bypassing overridden _update
+        
+        // Encrypt sensitive event data
+        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedForcedTransfer(encrypted);
+        
+        // Also emit unencrypted for backward compatibility (can be removed in production)
         emit ForcedTransfer(from, to, amount);
+        
         result = true;
     }
 
     /// @notice Updates frozen token amount when a forced transfer or burn exceeds the unfrozen balance.
     /// @dev This function reduces the frozen token amount to ensure consistency when tokens are forcibly
-    /// moved or burned beyond the unfrozen balance. Emits a {Frozen} event when frozen amount is reduced.
+    /// moved or burned beyond the unfrozen balance. Emits an encrypted {EncryptedFrozen} event when frozen amount is reduced.
     /// @param account The address whose frozen tokens may need adjustment.
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account);
         if(amount > unfrozenBalance && amount <= balanceOf(account)) {
             _frozenTokens[account] -= amount - unfrozenBalance;
+            
+            // Encrypt sensitive event data
+            bytes memory plaintext = abi.encode(account, _frozenTokens[account], _eventNonce++);
+            bytes32 nonce = bytes32(_eventNonce);
+            bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+            emit EncryptedFrozen(encrypted);
+            
+            // Also emit unencrypted for backward compatibility (can be removed in production)
             emit Frozen(account,  _frozenTokens[account]);
         }
     }
@@ -142,25 +245,42 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-20 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
+    /// Emits encrypted events in addition to the standard Transfer event to protect privacy.
+    /// Note: The standard Transfer event is still emitted by super._update() for compatibility.
     /// Reverts with {ERC7943InsufficientUnfrozenBalance} | {ERC7943CannotTransact} if any `canTransfer` check fails.
     /// @param from The address sending tokens (zero address for minting).
     /// @param to The address receiving tokens (zero address for burning).
     /// @param amount The amount being transferred.
     function _update(address from, address to, uint256 amount) internal virtual override {
-        if (from != address(0) && to != address(0)) { // Transfer
+        bool isTransfer = (from != address(0) && to != address(0));
+        bool isMint = (from == address(0));
+        bool isBurn = (to == address(0));
+        
+        if (isTransfer) { // Transfer
             uint256 unfrozenFromBalance = _unfrozenBalance(from);
             uint256 fromBalance = balanceOf(from);
             require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
             require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
             require(canTransact(from), ERC7943CannotTransact(from));
             require(canTransact(to), ERC7943CannotTransact(to));
-        } else if (from == address(0)) { // Mint
+        } else if (isMint) { // Mint
             require(canTransact(to), ERC7943CannotTransact(to));
-        } else { // Burn
+        } else if (isBurn) { // Burn
             _excessFrozenUpdate(from, amount);
         }
 
+        // Call parent to update balances (this will emit Transfer event)
         super._update(from, to, amount);
+        
+        // Emit encrypted transfer event for privacy
+        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedTransfer(encrypted);
+        
+        // Pad gas to prevent side-channel leakage from conditional branches
+        // Estimate worst-case gas: ~150k for transfer with all checks and encryption
+        Sapphire.padGas(200000);
     }
 
     /// @notice See {IERC165-supportsInterface}.
