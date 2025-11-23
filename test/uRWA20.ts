@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther, keccak256, encodePacked, readContract } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked } from "viem";
+import { readContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
 
@@ -19,9 +20,9 @@ describe("uRWA20", function () {
   // Helper to read from contract with signed queries on Sapphire
   // On Sapphire, view calls must be signed to have a non-zero msg.sender.
   // Viem's contract.read.* uses the public client, so we use readContract with wallet client.
-  async function readToken<T extends readonly unknown[]>(
-    functionName: string,
-    args: T,
+  async function readToken(
+    functionName: any,
+    args: any[] = [],
     walletClient: any = owner
   ): Promise<any> {
     if (hre.network.name === "sapphire-localnet") {
@@ -33,7 +34,7 @@ describe("uRWA20", function () {
         functionName,
         args,
         account: walletClient.account,
-      });
+      } as any);
     } else {
       // For non-Sapphire networks, use regular contract.read
       return (token.read as any)[functionName](args);
@@ -71,14 +72,8 @@ describe("uRWA20", function () {
     ]);
     await waitForTx(hash2, client);
 
-    // On Sapphire, view calls must be signed to have a non-zero msg.sender.
-    // Viem's contract.read.* uses the public client even when a wallet client is provided.
-    // The solution: Always use wallet-backed contract instances for view calls on Sapphire.
-    // For non-Sapphire networks, we can use the regular contract instance.
-
     return {
-      token: tokenContract, // Keep original for write operations
-      tokenForReads, // Use this for read operations on Sapphire
+      token: tokenContract,
       owner: ownerWallet,
       otherAccount: otherAccountWallet,
       thirdAccount: thirdAccountWallet,
