@@ -34,7 +34,7 @@ async function main() {
 
   // Use hardhat's viem clients which are automatically wrapped by sapphire-hardhat
   const publicClient = await hre.viem.getPublicClient();
-  const [admin, user1, user2] = await hre.viem.getWalletClients();
+  const [admin, user1, user2, user3] = await hre.viem.getWalletClients();
 
   // Create contract instances for each wallet
   const adminContract = getContract({
@@ -55,6 +55,12 @@ async function main() {
     client: { public: publicClient, wallet: user2 }
   });
 
+  const user3Contract = getContract({
+    address: CONTRACT_ADDRESS,
+    abi: uRWA20Artifact.abi,
+    client: { public: publicClient, wallet: user3 }
+  });
+
   console.log("\n📋 Contract Information:");
   console.log(`   uRWA20 Token: ${CONTRACT_ADDRESS}`);
 
@@ -62,6 +68,7 @@ async function main() {
   console.log(`   Admin:  ${admin.account.address}`);
   console.log(`   User 1: ${user1.account.address}`);
   console.log(`   User 2: ${user2.account.address}`);
+  console.log(`   User 3: ${user3.account.address}`);
 
   console.log("\n" + "=".repeat(60));
   console.log("\n🔐 DEMONSTRATION: Encrypted Calldata Transactions\n");
@@ -85,13 +92,8 @@ async function main() {
     ]);
     await waitForTx(mintHash, publicClient);
 
-    // Check balance (need VIEWER_ROLE for this)
-    try {
-      const balance1 = await adminContract.read.balanceOf([user1.account.address]);
-      console.log(`   ✅ Minted successfully. User 1 balance: ${formatEther(balance1)} tokens\n`);
-    } catch (e) {
-      console.log(`   ✅ Minted successfully (balance check requires VIEWER_ROLE)\n`);
-    }
+    console.log(`   ✅ Minted successfully`);
+    console.log(`      ℹ️  Balances are CONFIDENTIAL and encrypted on-chain\n`);
 
     // Step 3: Whitelist User 2
     console.log("3️⃣  Whitelisting User 2 (Encrypted)");
@@ -111,15 +113,8 @@ async function main() {
     ]);
     await waitForTx(transferHash, publicClient);
 
-    try {
-      const balance1After = await adminContract.read.balanceOf([user1.account.address]);
-      const balance2After = await adminContract.read.balanceOf([user2.account.address]);
-      console.log(`   ✅ Transfer successful!`);
-      console.log(`      User 1 balance: ${formatEther(balance1After)} tokens`);
-      console.log(`      User 2 balance: ${formatEther(balance2After)} tokens\n`);
-    } catch (e) {
-      console.log(`   ✅ Transfer successful (balance check requires VIEWER_ROLE)\n`);
-    }
+    console.log(`   ✅ Transfer successful!`);
+    console.log(`      ℹ️  Balances are CONFIDENTIAL and encrypted on-chain\n`);
 
     // Step 5: Approve and TransferFrom
     console.log("5️⃣  User 2 approves User 1 to spend 100 tokens (Encrypted)");
@@ -139,15 +134,27 @@ async function main() {
     ]);
     await waitForTx(transferFromHash, publicClient);
 
-    try {
-      const balance1Final = await adminContract.read.balanceOf([user1.account.address]);
-      const balance2Final = await adminContract.read.balanceOf([user2.account.address]);
-      console.log(`   ✅ TransferFrom successful!`);
-      console.log(`      User 1 balance: ${formatEther(balance1Final)} tokens`);
-      console.log(`      User 2 balance: ${formatEther(balance2Final)} tokens\n`);
-    } catch (e) {
-      console.log(`   ✅ TransferFrom successful (balance check requires VIEWER_ROLE)\n`);
-    }
+    console.log(`   ✅ TransferFrom successful!`);
+    console.log(`      ℹ️  Balances are CONFIDENTIAL and encrypted on-chain\n`);
+
+    // Step 7: Whitelist and interact with User 3
+    console.log("7️⃣  Whitelisting User 3 (Encrypted)");
+    const whitelistHash3 = await adminContract.write.changeWhitelist([
+      user3.account.address,
+      true
+    ]);
+    await waitForTx(whitelistHash3, publicClient);
+    console.log("   ✅ User 3 whitelisted successfully\n");
+
+    console.log("8️⃣  User 1 transfers 50 tokens to User 3 (Encrypted)");
+    const transferToUser3 = parseEther("50");
+    const transferHash3 = await user1Contract.write.transfer([
+      user3.account.address,
+      transferToUser3
+    ]);
+    await waitForTx(transferHash3, publicClient);
+    console.log(`   ✅ Transfer to User 3 successful!`);
+    console.log(`      ℹ️  Balances are CONFIDENTIAL and encrypted on-chain\n`);
 
     console.log("\n" + "=".repeat(60));
     console.log("\n✨ Demo Complete!\n");
@@ -157,6 +164,11 @@ async function main() {
     console.log("  🔐 Encrypted transfers");
     console.log("  🔐 Encrypted approvals");
     console.log("  🔐 Encrypted transferFrom\n");
+    console.log("Privacy Features:");
+    console.log("  ✅ All transaction calldata is encrypted on-chain");
+    console.log("  ✅ Token balances are CONFIDENTIAL (encrypted state)");
+    console.log("  ✅ Transfer amounts and recipients are hidden from observers");
+    console.log("  ✅ Only authorized parties can view private data\n");
     console.log("All transactions used Sapphire's automatic calldata encryption!");
     console.log("=".repeat(60) + "\n");
   } catch (error) {
