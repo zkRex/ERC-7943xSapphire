@@ -44,6 +44,12 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  etherscan: {
+    enabled: false,
+  },
+  sourcify: {
+    enabled: true,
+  },
   networks: {
     sapphire: {
       url: "https://sapphire.oasis.io",
