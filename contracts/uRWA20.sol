@@ -202,7 +202,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @notice Creates `amount` new tokens and assigns them to `to`.
     /// @dev Can only be called by accounts holding the `MINTER_ROLE`.
     /// Requires `to` to be allowed according to {canTransact}.
-    /// Emits a {Transfer} event with `from` set to the zero address.
+    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
     /// @param to The address that will receive the minted tokens.
     /// @param amount The amount of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
@@ -211,10 +211,46 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Destroys `amount` tokens from the caller's account.
     /// @dev Can only be called by accounts holding the `BURNER_ROLE`.
-    /// Emits a {Transfer} event with `to` set to the zero address.
+    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
     /// @param amount The amount of tokens to burn.
     function burn(uint256 amount) external onlyRole(BURNER_ROLE) {
         _burn(_msgSender(), amount);
+    }
+
+    /// @dev Overrides Solady's _mint to update balances without emitting Transfer events.
+    /// @param to The address that will receive the minted tokens.
+    /// @param amount The amount of tokens to mint.
+    function _mint(address to, uint256 amount) internal virtual override {
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+        
+        // Update balances directly without emitting Transfer event
+        _updateBalanceWithoutEvent(address(0), to, amount);
+        
+        // Emit only encrypted event
+        bytes memory plaintext = abi.encode(address(0), to, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedTransfer(encrypted);
+        
+        Sapphire.padGas(200000);
+    }
+
+    /// @dev Overrides Solady's _burn to update balances without emitting Transfer events.
+    /// @param from The address from which tokens are burned.
+    /// @param amount The amount of tokens to burn.
+    function _burn(address from, uint256 amount) internal virtual override {
+        _excessFrozenUpdate(from, amount);
+        
+        // Update balances directly without emitting Transfer event
+        _updateBalanceWithoutEvent(from, address(0), amount);
+        
+        // Emit only encrypted event
+        bytes memory plaintext = abi.encode(from, address(0), amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedTransfer(encrypted);
+        
+        Sapphire.padGas(200000);
     }
 
     /// @inheritdoc IERC7943Fungible
@@ -236,13 +272,12 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     function forcedTransfer(address from, address to, uint256 amount) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(from != address(0) && to != address(0), NotZeroAddress());
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        uint256 fromBalance = super.balanceOf(from);
-        require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
+        uint256 fromBalance = balanceOf(from);
+        require(fromBalance >= amount, ERC20.InsufficientBalance());
         _excessFrozenUpdate(from, amount);
         
-        // Use super._update() to update balances (will emit Transfer events, but balances must be updated)
-        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
-        super._update(from, to, amount);
+        // Update balances directly without emitting Transfer event
+        _updateBalanceWithoutEvent(from, to, amount);
         
         // Encrypt sensitive event data
         bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
@@ -250,6 +285,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedForcedTransfer(encrypted);
         
+        Sapphire.padGas(200000);
         result = true;
     }
 
@@ -279,7 +315,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param account The address to calculate unfrozen balance for.
     /// @return unfrozenBalance The amount of tokens available for transfer.
     function _unfrozenBalance(address account) internal view returns(uint256 unfrozenBalance) {
-        uint256 accountBalance = super.balanceOf(account);
+        uint256 accountBalance = balanceOf(account);
         unfrozenBalance = accountBalance < _frozenTokens[account] ? 0 : accountBalance - _frozenTokens[account];
     }
 
