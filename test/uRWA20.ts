@@ -58,13 +58,13 @@ describe("uRWA20", function () {
   // Use shorter timeout for local networks (30s), longer for remote (2min)
   const isLocalNetwork = hre.network.name === "sapphire-localnet" || hre.network.name === "hardhat";
   this.timeout(isLocalNetwork ? 30000 : 120000);
-  
+
   let token: any;
   let owner: any;
   let otherAccount: any;
   let thirdAccount: any;
   let publicClient: any;
-  
+
   // Helper to read from contract with SIWE authentication on Sapphire
   // On Sapphire, view calls must include a SIWE token for authentication.
   async function readToken(
@@ -91,7 +91,14 @@ describe("uRWA20", function () {
       } as any);
     } else {
       const argsWithToken = [...args, "0x"];
-      return (token.read as any)[functionName](argsWithToken);
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+      return readContract(walletClient, {
+        address: token.address,
+        abi: abi.abi,
+        functionName,
+        args: argsWithToken,
+        account: walletClient.account,
+      } as any);
     }
   }
 
@@ -126,14 +133,14 @@ describe("uRWA20", function () {
     // Compute VIEWER_ROLE directly: keccak256(abi.encodePacked("VIEWER_ROLE"))
     // This matches Solidity's keccak256("VIEWER_ROLE")
     const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
-    
+
     // Grant roles sequentially to avoid potential issues
     const hash1 = await tokenContract.write.grantRole([
       viewerRole,
       getAddress(otherAccountWallet.account.address),
     ]);
     await waitForTx(hash1, client);
-    
+
     const hash2 = await tokenContract.write.grantRole([
       viewerRole,
       getAddress(thirdAccountWallet.account.address),
@@ -198,7 +205,7 @@ describe("uRWA20", function () {
         "getFrozenTokens(address)" +
         "canTransfer(address,address,uint256)"
       ).toString("hex").slice(0, 8);
-      
+
       // Note: This is a simplified check. In practice, we'd calculate the proper interface ID.
       // For now, we'll test the known interfaces
       expect(await token.read.supportsInterface(["0x01ffc9a7"])).to.be.true; // IERC165
@@ -216,7 +223,7 @@ describe("uRWA20", function () {
         true,
       ]);
       await waitForTx(hash, publicClient);
-      
+
       expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.true;
     });
 
@@ -232,7 +239,7 @@ describe("uRWA20", function () {
         false,
       ]);
       await waitForTx(hash2, publicClient);
-      
+
       expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
     });
   });
@@ -244,7 +251,7 @@ describe("uRWA20", function () {
         true,
       ]);
       await waitForTx(hash, publicClient);
-      
+
       expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.true;
     });
 
@@ -252,10 +259,10 @@ describe("uRWA20", function () {
       // Verify otherAccount does not have WHITELIST_ROLE
       const whitelistRole = await token.read.WHITELIST_ROLE();
       expect(await token.read.hasRole([whitelistRole, getAddress(otherAccount.account.address)])).to.be.false;
-      
+
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
+
       // Use simulateContract to check if it would revert
       await expect(
         tokenAsOther.simulate.changeWhitelist([
@@ -279,7 +286,7 @@ describe("uRWA20", function () {
         parseEther("100"),
       ]);
       await waitForTx(mintHash, publicClient);
-      
+
       expect(await readToken("balanceOf", [getAddress(otherAccount.account.address)])).to.equal(parseEther("100"));
     });
 
@@ -290,10 +297,10 @@ describe("uRWA20", function () {
         false,
       ]);
       await waitForTx(hash, publicClient);
-      
+
       // Verify account is not whitelisted
       expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
-      
+
       // Use simulateContract to check if it would revert
       await expect(
         token.simulate.mint([
@@ -353,7 +360,7 @@ describe("uRWA20", function () {
 
       const burnHash = await token.write.burn([parseEther("50")]);
       await waitForTx(burnHash, publicClient);
-      
+
       expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
     });
 
@@ -408,7 +415,7 @@ describe("uRWA20", function () {
         parseEther("50"),
       ]);
       await waitForTx(freezeHash, publicClient);
-      
+
       expect(await readToken("getFrozenTokens", [getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
     });
 
@@ -560,7 +567,7 @@ describe("uRWA20", function () {
       // Verify frozen tokens
       expect(await readToken("getFrozenTokens", [getAddress(owner.account.address)])).to.equal(parseEther("60"));
       expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("100"));
-      
+
       // Verify canTransfer returns false
       expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
@@ -615,7 +622,7 @@ describe("uRWA20", function () {
         parseEther("50"),
       ]);
       await waitForTx(forceHash, publicClient);
-      
+
       expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
       expect(await readToken("balanceOf", [getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
       // Frozen tokens should be reduced since we transferred from frozen balance
@@ -890,7 +897,7 @@ describe("uRWA20", function () {
       const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
       const allWallets = await hre.viem.getWalletClients({ chain });
       const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
-      
+
       // If using thirdAccount, revoke VIEWER_ROLE temporarily
       const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
       let needsRevoke = false;
@@ -958,7 +965,7 @@ describe("uRWA20", function () {
       const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
       const allWallets = await hre.viem.getWalletClients({ chain });
       const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
-      
+
       // If using thirdAccount, revoke VIEWER_ROLE temporarily
       const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
       let needsRevoke = false;
@@ -983,6 +990,12 @@ describe("uRWA20", function () {
         true,
       ]);
       await waitForTx(whitelistHash, publicClient);
+
+      const whitelistHash2 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      await waitForTx(whitelistHash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(unauthorizedWallet.account.address),
@@ -1028,7 +1041,7 @@ describe("uRWA20", function () {
       const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
       const allWallets = await hre.viem.getWalletClients({ chain });
       const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
-      
+
       // If using thirdAccount, revoke VIEWER_ROLE temporarily
       const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
       let needsRevoke = false;
