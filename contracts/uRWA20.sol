@@ -244,9 +244,9 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bool isBurn = (to == address(0));
         
         if (isTransfer) { // Transfer
-            uint256 unfrozenFromBalance = _unfrozenBalance(from);
-            uint256 fromBalance = balanceOf(from);
+            uint256 fromBalance = _balances[from];
             require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
+            uint256 unfrozenFromBalance = _unfrozenBalance(from);
             require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
             require(_isWhitelisted(from), ERC7943CannotTransact(from));
             require(_isWhitelisted(to), ERC7943CannotTransact(to));
@@ -259,9 +259,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         // Update balances directly without calling super._update() to avoid emitting Transfer events
         // This preserves privacy by only emitting encrypted events
         if (from != address(0)) {
-            uint256 fromBalance = balanceOf(from);
             unchecked {
-                _balances[from] = fromBalance - amount;
+                _balances[from] -= amount;
             }
         }
 
