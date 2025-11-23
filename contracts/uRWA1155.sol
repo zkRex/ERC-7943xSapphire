@@ -262,8 +262,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
     /// @notice Hook that is called before any token transfer, including minting and burning.
     /// @dev Overrides the ERC-1155 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
-    /// Emits encrypted events in addition to the standard Transfer events to protect privacy.
-    /// Note: The standard Transfer events are still emitted by super._update() for compatibility.
+    /// Updates balances directly without emitting standard Transfer events to protect privacy.
+    /// Only emits encrypted events using Sapphire precompiles.
     /// Reverts with {ERC7943CannotTransact} | {ERC7943InsufficientUnfrozenBalance} | {ERC1155InsufficientBalance} 
     /// if any `canTransfer`/`canTransact` or other check fails.
     /// @param from The address sending tokens (zero address for minting).
@@ -294,10 +294,27 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             }
         }
 
-        // Call parent to update balances (this will emit Transfer events)
-        super._update(from, to, ids, values);
+        // Update balances directly without calling super._update() to avoid emitting Transfer events
+        // This preserves privacy by only emitting encrypted events
+        for (uint256 i = 0; i < ids.length; ++i) {
+            uint256 id = ids[i];
+            uint256 value = values[i];
+
+            if (from != address(0)) {
+                uint256 fromBalance = balanceOf(from, id);
+                unchecked {
+                    _balances[id][from] = fromBalance - value;
+                }
+            }
+
+            if (to != address(0)) {
+                unchecked {
+                    _balances[id][to] += value;
+                }
+            }
+        }
         
-        // Emit encrypted transfer event for privacy
+        // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, ids, values, _eventNonce++);
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");

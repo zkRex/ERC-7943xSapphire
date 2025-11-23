@@ -238,8 +238,8 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-721 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logics.
-    /// Emits encrypted events in addition to the standard Transfer event to protect privacy.
-    /// Note: The standard Transfer event is still emitted by super._update() for compatibility.
+    /// Updates ownership directly without emitting standard Transfer events to protect privacy.
+    /// Only emits encrypted events using Sapphire precompiles.
     /// Reverts with {ERC721IncorrectOwner} | {ERC7943FrozenTokenId} | {ERC7943CannotTransact} if any `canTransfer`/`canTransact` or other check fails.
     /// @param to The address receiving tokens (zero address for burning).
     /// @param tokenId The ID of the token being transferred.
@@ -268,9 +268,27 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
             revert ERC721NonexistentToken(tokenId);
         }
 
-        address previousOwner = super._update(to, tokenId, auth);
+        // Update ownership directly without calling super._update() to avoid emitting Transfer events
+        // This preserves privacy by only emitting encrypted events
+        address previousOwner = from;
         
-        // Emit encrypted transfer event for privacy
+        if (from != address(0)) {
+            // Clear approval and update balance
+            _approve(address(0), tokenId, from, false);
+            unchecked {
+                _balances[from] -= 1;
+            }
+        }
+
+        if (to != address(0)) {
+            unchecked {
+                _balances[to] += 1;
+            }
+        }
+
+        _ownerOf[tokenId] = to;
+        
+        // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, tokenId, _eventNonce++);
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");

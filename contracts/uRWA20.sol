@@ -224,8 +224,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-20 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
-    /// Emits encrypted events in addition to the standard Transfer event to protect privacy.
-    /// Note: The standard Transfer event is still emitted by super._update() for compatibility.
+    /// Updates balances directly without emitting standard Transfer events to protect privacy.
+    /// Only emits encrypted events using Sapphire precompiles.
     /// Reverts with {ERC7943InsufficientUnfrozenBalance} | {ERC7943CannotTransact} if any `canTransfer` check fails.
     /// @param from The address sending tokens (zero address for minting).
     /// @param to The address receiving tokens (zero address for burning).
@@ -248,10 +248,33 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
             _excessFrozenUpdate(from, amount);
         }
 
-        // Call parent to update balances (this will emit Transfer event)
-        super._update(from, to, amount);
+        // Update balances directly without calling super._update() to avoid emitting Transfer events
+        // This preserves privacy by only emitting encrypted events
+        if (from != address(0)) {
+            uint256 fromBalance = balanceOf(from);
+            unchecked {
+                _balances[from] = fromBalance - amount;
+            }
+        }
+
+        if (to != address(0)) {
+            unchecked {
+                _balances[to] += amount;
+            }
+        }
+
+        // Update total supply for mints and burns
+        if (isMint) {
+            unchecked {
+                _totalSupply += amount;
+            }
+        } else if (isBurn) {
+            unchecked {
+                _totalSupply -= amount;
+            }
+        }
         
-        // Emit encrypted transfer event for privacy
+        // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
