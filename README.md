@@ -194,8 +194,8 @@ Network URLs and chain IDs are configured in `hardhat.config.ts`.
 
 The contracts are currently deployed on the Oasis Sapphire testnet:
 
-- **CalldataEncryption**: [`0x4631BCAbD6dF18D94796344963cB60d44a4136b6`](https://explorer.oasis.io/testnet/sapphire/address/0x4631BCAbD6dF18D94796344963cB60d44a4136b6)
-- **uRWA20**: [`0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D`](https://explorer.oasis.io/testnet/sapphire/address/0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D)
+- **CalldataEncryption**: [`0x444eD80B9F6ED84DAc85C075159b1f888583D7FD`](https://explorer.oasis.io/testnet/sapphire/address/0x444eD80B9F6ED84DAc85C075159b1f888583D7FD) - [Verified on Sourcify](https://repo.sourcify.dev/contracts/full_match/23295/0x444eD80B9F6ED84DAc85C075159b1f888583D7FD/)
+- **uRWA20**: [`0x448200ddAF80FacF3c85C9449E315332D818e300`](https://explorer.oasis.io/testnet/sapphire/address/0x448200ddAF80FacF3c85C9449E315332D818e300) - [Verified on Sourcify](https://repo.sourcify.dev/contracts/full_match/23295/0x448200ddAF80FacF3c85C9449E315332D818e300/)
 
 View the deployments on the [Oasis Sapphire Testnet Explorer](https://explorer.oasis.io/testnet/sapphire/).
 
