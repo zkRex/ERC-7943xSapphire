@@ -17,12 +17,12 @@ async function main() {
   }
 
   // Get values from scripts/.env
-  const targetAddress = (process.env.TARGET_ADDRESS || process.env.TARGET_ADDRESS) as `0x${string}`;
+  const targetAddress = process.env.TARGET_ADDRESS as `0x${string}`;
   if (!targetAddress) {
     throw new Error("TARGET_ADDRESS environment variable is required in scripts/.env");
   }
 
-  const tokenAddress = (process.env.TOKEN_ADDRESS || process.env.TOKEN_ADDRESS) as `0x${string}`;
+  const tokenAddress = process.env.TOKEN_ADDRESS as `0x${string}`;
   if (!tokenAddress) {
     throw new Error("TOKEN_ADDRESS environment variable is required in scripts/.env");
   }
@@ -118,7 +118,7 @@ async function main() {
       functionName: "balanceOf",
       args: [account.address],
     });
-    senderTokenBalance = BigInt(balance.toString());
+    senderTokenBalance = typeof balance === "bigint" ? balance : BigInt(balance as string);
     console.log(`\nSender token balance: ${formatEther(senderTokenBalance)} tokens`);
   } catch (error) {
     console.log(`\nCould not read sender token balance (may require SIWE), proceeding to mint...`);
@@ -185,7 +185,8 @@ async function main() {
       functionName: "balanceOf",
       args: [targetAddress],
     });
-    console.log(`Target token balance: ${formatEther(BigInt(targetTokenBalance.toString()))} tokens`);
+    const balance = typeof targetTokenBalance === "bigint" ? targetTokenBalance : BigInt(targetTokenBalance as string);
+    console.log(`Target token balance: ${formatEther(balance)} tokens`);
   } catch (error) {
     console.log(`Note: Could not read token balance (may require SIWE authentication)`);
   }

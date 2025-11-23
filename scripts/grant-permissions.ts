@@ -2,6 +2,11 @@ import hre from "hardhat";
 import { createWalletClient, createPublicClient, http } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { sapphireLocalnetChain } from "../hardhat.config";
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+// Load environment variables from scripts/.env
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 // Role names - we'll read the actual hashes from the contract
 const ROLE_NAMES = [
@@ -16,15 +21,20 @@ const ROLE_NAMES = [
 ] as const;
 
 async function main() {
-  // Target address to grant permissions to
-  const targetAddress = "0xB4AB6388B6b5eC3Ec4076A2515B398b019229813" as `0x${string}`;
-  
-  // Token contract address
-  const tokenAddress = "0x7969c5eD335650692Bc04293B07F5BF2e7A673C0" as `0x${string}`;
+  // Get values from scripts/.env
+  const targetAddress = process.env.TARGET_ADDRESS as `0x${string}`;
+  if (!targetAddress) {
+    throw new Error("TARGET_ADDRESS environment variable is required in scripts/.env");
+  }
+
+  const tokenAddress = process.env.TOKEN_ADDRESS as `0x${string}`;
+  if (!tokenAddress) {
+    throw new Error("TOKEN_ADDRESS environment variable is required in scripts/.env");
+  }
 
   // Use account 0 (deployer/admin) which has DEFAULT_ADMIN_ROLE
-  const defaultMnemonic = "test test test test test test test test test test test junk";
-  const adminAccount = mnemonicToAccount(defaultMnemonic, { accountIndex: 0 });
+  const adminMnemonic = process.env.ADMIN_MNEMONIC || "test test test test test test test test test test test junk";
+  const adminAccount = mnemonicToAccount(adminMnemonic, { accountIndex: 0 });
 
   // Create clients
   const publicClient = createPublicClient({
@@ -60,6 +70,7 @@ async function main() {
         address: tokenAddress,
         abi: tokenArtifact.abi,
         functionName: `${roleName}`,
+        args: [],
       }) as `0x${string}`;
       roleHashes[roleName] = roleHash;
     } catch (error) {
@@ -93,18 +104,20 @@ async function main() {
     console.log("");
   }
 
-  // Grant roles - you can modify this array to grant specific roles
-  // For now, granting common useful roles (excluding DEFAULT_ADMIN_ROLE for security)
-  const rolesToGrant = [
-    "MINTER_ROLE",
-    "BURNER_ROLE",
-    "WHITELIST_ROLE",
-    "VIEWER_ROLE",
-    // Uncomment to grant additional roles:
-    // "FREEZING_ROLE",
-    // "FORCE_TRANSFER_ROLE",
-    // "MAIN_AUDITOR_ROLE",
-  ];
+  // Grant roles - read from environment variable (comma-separated)
+  // Default to common useful roles if not specified
+  const rolesToGrantEnv = process.env.ROLES_TO_GRANT || "MINTER_ROLE,BURNER_ROLE,WHITELIST_ROLE,VIEWER_ROLE";
+  const rolesToGrant = rolesToGrantEnv
+    .split(",")
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0);
+  
+  // Validate roles
+  const validRoles = new Set(ROLE_NAMES);
+  const invalidRoles = rolesToGrant.filter((r) => !validRoles.has(r as any));
+  if (invalidRoles.length > 0) {
+    throw new Error(`Invalid roles specified: ${invalidRoles.join(", ")}. Valid roles: ${ROLE_NAMES.join(", ")}`);
+  }
 
   console.log(`Granting ${rolesToGrant.length} role(s) to ${targetAddress}...\n`);
 
