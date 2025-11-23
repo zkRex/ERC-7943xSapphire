@@ -150,14 +150,20 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     }
 
     /// @inheritdoc IERC7943Fungible
-    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Allows users to check their own transfer permissions, or requires VIEWER_ROLE for others.
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransfer(address from, address to, uint256 amount, bytes memory token) public virtual override view returns (bool allowed) {
         address caller = _getAuthenticatedCaller(token);
-        require(hasRole(VIEWER_ROLE, caller), "Access denied");
+        // Allow users to check their own transfer permissions, or require VIEWER_ROLE for others
+        require(caller == from || hasRole(VIEWER_ROLE, caller), "Access denied");
         uint256 fromBalance = super.balanceOf(from);
         if (fromBalance < _frozenTokens[from]) return allowed;
         if (amount > fromBalance - _frozenTokens[from]) return allowed;
-        if (!canTransact(from, token) || !canTransact(to, token)) return allowed;
+        // When caller is checking their own transfer, check whitelists directly
+        // Otherwise caller has VIEWER_ROLE and can use canTransact
+        bool fromCanTransact = (caller == from) ? _isWhitelisted(from) : canTransact(from, token);
+        bool toCanTransact = (caller == from) ? _isWhitelisted(to) : canTransact(to, token);
+        if (!fromCanTransact || !toCanTransact) return allowed;
         allowed = true;
     }
 
@@ -170,29 +176,35 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     }
 
     /// @inheritdoc IERC7943Fungible
-    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Allows users to check their own whitelist status, or requires VIEWER_ROLE for others.
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account, bytes memory token) public virtual override view returns (bool allowed) {
         address caller = _getAuthenticatedCaller(token);
-        require(hasRole(VIEWER_ROLE, caller), "Access denied");
+        // Allow users to check their own whitelist status, or require VIEWER_ROLE for others
+        require(caller == account || hasRole(VIEWER_ROLE, caller), "Access denied");
         allowed = _isWhitelisted(account);
     }
 
     /// @inheritdoc IERC7943Fungible
-    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Allows users to check their own frozen tokens, or requires VIEWER_ROLE for others.
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function getFrozenTokens(address account, bytes memory token) public virtual override view returns (uint256 amount) {
         address caller = _getAuthenticatedCaller(token);
-        require(hasRole(VIEWER_ROLE, caller), "Access denied");
+        // Allow users to check their own frozen tokens, or require VIEWER_ROLE for others
+        require(caller == account || hasRole(VIEWER_ROLE, caller), "Access denied");
         amount = _frozenTokens[account];
     }
 
     /// @notice Returns the balance of the account.
-    /// @dev Requires VIEWER_ROLE and SIWE authentication via token parameter.
+    /// @dev Allows users to read their own balance, or requires VIEWER_ROLE for other accounts.
+    /// SIWE authentication via token parameter is required for view calls.
     /// @param account The address to query the balance of.
     /// @param token SIWE session token for authenticated view calls.
     /// @return The balance of the account.
     function balanceOf(address account, bytes memory token) public view virtual returns (uint256) {
         address caller = _getAuthenticatedCaller(token);
-        require(hasRole(VIEWER_ROLE, caller), "Access denied");
+        // Allow users to read their own balance, or require VIEWER_ROLE for others
+        require(caller == account || hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.balanceOf(account);
     }
 
@@ -207,14 +219,16 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     }
 
     /// @notice Returns the amount of tokens that an owner allowed to a spender.
-    /// @dev Requires VIEWER_ROLE and SIWE authentication via token parameter.
+    /// @dev Allows owners to read their own allowances, or requires VIEWER_ROLE for others.
+    /// SIWE authentication via token parameter is required for view calls.
     /// @param owner The address which owns the funds.
     /// @param spender The address which will spend the funds.
     /// @param token SIWE session token for authenticated view calls.
     /// @return The amount of tokens still available for the spender.
     function allowance(address owner, address spender, bytes memory token) public view virtual returns (uint256) {
         address caller = _getAuthenticatedCaller(token);
-        require(hasRole(VIEWER_ROLE, caller), "Access denied");
+        // Allow owners to read their own allowances, or require VIEWER_ROLE for others
+        require(caller == owner || hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.allowance(owner, spender);
     }
 
