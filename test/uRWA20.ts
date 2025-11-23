@@ -11,11 +11,21 @@ describe("uRWA20", function () {
   this.timeout(120000); // 2 minutes timeout for all tests
   
   let token: any;
-  let tokenForReads: any; // Wallet-backed contract instance for view calls on Sapphire
   let owner: any;
   let otherAccount: any;
   let thirdAccount: any;
   let publicClient: any;
+  
+  // Helper to get a wallet-backed contract instance for view calls on Sapphire
+  // On Sapphire, view calls must be signed to have a non-zero msg.sender
+  async function getTokenForReads(walletClient: any) {
+    if (hre.network.name === "sapphire-localnet") {
+      return await hre.viem.getContractAt("uRWA20", token.address, {
+        client: { public: publicClient, wallet: walletClient }
+      });
+    }
+    return token;
+  }
 
   async function deployTokenFixture() {
     const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
@@ -48,13 +58,10 @@ describe("uRWA20", function () {
     ]);
     await waitForTx(hash2, client);
 
-    // On Sapphire, view calls must be signed. Create a contract instance with wallet client for reads.
-    // Note: viem's contract.read.* uses the public client, so we need to use wallet-backed instances.
-    const tokenForReads = hre.network.name === "sapphire-localnet" 
-      ? await hre.viem.getContractAt("uRWA20", tokenContract.address, { 
-          client: { public: client, wallet: ownerWallet } 
-        })
-      : tokenContract;
+    // On Sapphire, view calls must be signed to have a non-zero msg.sender.
+    // Viem's contract.read.* uses the public client even when a wallet client is provided.
+    // The solution: Always use wallet-backed contract instances for view calls on Sapphire.
+    // For non-Sapphire networks, we can use the regular contract instance.
 
     return {
       token: tokenContract, // Keep original for write operations
@@ -69,7 +76,6 @@ describe("uRWA20", function () {
   beforeEach(async function () {
     const fixture = await deployTokenFixture();
     token = fixture.token;
-    tokenForReads = fixture.tokenForReads || fixture.token; // Fallback to token if not Sapphire
     owner = fixture.owner;
     otherAccount = fixture.otherAccount;
     thirdAccount = fixture.thirdAccount;
