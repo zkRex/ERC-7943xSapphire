@@ -4,6 +4,16 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:localnet": "hardhat test --network sapphire-localnet",
+    "test:testnet": "hardhat test --network sapphire-testnet",
+    "test:urwa20:localnet": "hardhat test --network sapphire-localnet test/uRWA20.ts > test-results-urwa20-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:urwa20:testnet": "hardhat test --network sapphire-testnet test/uRWA20.ts > test-results-urwa20-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:urwa721:localnet": "hardhat test --network sapphire-localnet test/uRWA721.ts > test-results-urwa721-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:urwa721:testnet": "hardhat test --network sapphire-testnet test/uRWA721.ts > test-results-urwa721-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:urwa1155:localnet": "hardhat test --network sapphire-localnet test/uRWA1155.ts > test-results-urwa1155-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:urwa1155:testnet": "hardhat test --network sapphire-testnet test/uRWA1155.ts > test-results-urwa1155-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:all:localnet": "hardhat test --network sapphire-localnet > test-results-all-$(date +%Y%m%d-%H%M%S).log 2>&1",
+    "test:all:testnet": "hardhat test --network sapphire-testnet > test-results-all-$(date +%Y%m%d-%H%M%S).log 2>&1",
     "deploy:localnet": "hardhat ignition deploy ignition/modules/Lock.ts --network sapphire-localnet",
     "deploy:testnet": "hardhat ignition deploy ignition/modules/Lock.ts --network sapphire-testnet",
     "deploy:mainnet": "hardhat ignition deploy ignition/modules/Lock.ts --network sapphire"
