@@ -227,7 +227,9 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         
         if (to != address(0)) {
             address operator = _msgSender();
-            ERC1155Utils.checkOnERC1155Received(operator, from, to, tokenId, amount, "");
+            if (_hasCode(to)) {
+                _checkOnERC1155Received(operator, from, to, tokenId, amount, "");
+            }
         } 
 
         // Encrypt sensitive event data
@@ -267,8 +269,61 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param tokenId The ID of the token to check
     /// @return unfrozenBalance The amount of tokens available for transfer.
     function _unfrozenBalance(address account, uint256 tokenId) internal view returns(uint256 unfrozenBalance) {
-        uint256 accountBalance = super.balanceOf(account, tokenId);
+        uint256 accountBalance = balanceOf(account, tokenId);
         unfrozenBalance = accountBalance < _frozenTokens[account][tokenId] ? 0 : accountBalance - _frozenTokens[account][tokenId];
+    }
+
+    /// @notice Internal helper to update balances without emitting Transfer events.
+    /// @dev Uses Solady's storage slot pattern to update balances directly for privacy.
+    /// @param from The address sending tokens (zero address for minting).
+    /// @param to The address receiving tokens (zero address for burning).
+    /// @param ids The array of token IDs.
+    /// @param values The array of amounts being transferred.
+    function _updateBalancesWithoutEvent(address from, address to, uint256[] memory ids, uint256[] memory values) internal {
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Solady ERC1155 storage pattern:
+            // Balance slot = keccak256(0x00, 0x40) where:
+            // - 0x20 contains _ERC1155_MASTER_SLOT_SEED (0x9a31110384e0b0c9)
+            // - 0x14 contains owner address (20 bytes)
+            // - 0x00 contains token id
+            
+            let masterSlotSeed := 0x9a31110384e0b0c9
+            mstore(0x20, masterSlotSeed)
+            
+            // Loop through all ids and values
+            for { let i := 0 } lt(i, ids.length) { i := add(i, 1) } {
+                let id := mload(add(ids, add(0x20, mul(i, 0x20))))
+                let amount := mload(add(values, add(0x20, mul(i, 0x20))))
+                
+                if iszero(iszero(from)) {
+                    // Decrease balance of `from`
+                    mstore(0x14, from)
+                    mstore(0x00, id)
+                    let fromBalanceSlot := keccak256(0x00, 0x40)
+                    let fromBalance := sload(fromBalanceSlot)
+                    if gt(amount, fromBalance) {
+                        mstore(0x00, 0xf4d678b8) // `InsufficientBalance()`
+                        revert(0x1c, 0x04)
+                    }
+                    sstore(fromBalanceSlot, sub(fromBalance, amount))
+                }
+                
+                if iszero(iszero(to)) {
+                    // Increase balance of `to`
+                    mstore(0x14, to)
+                    mstore(0x00, id)
+                    let toBalanceSlot := keccak256(0x00, 0x40)
+                    let toBalanceBefore := sload(toBalanceSlot)
+                    let toBalanceAfter := add(toBalanceBefore, amount)
+                    if lt(toBalanceAfter, toBalanceBefore) {
+                        mstore(0x00, 0x01336cea) // `AccountBalanceOverflow()`
+                        revert(0x1c, 0x04)
+                    }
+                    sstore(toBalanceSlot, toBalanceAfter)
+                }
+            }
+        }
     }
 
     /// @notice Hook that is called before any token transfer, including minting and burning.
