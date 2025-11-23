@@ -8,6 +8,7 @@ import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
 import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
 import {SiweAuth} from "@oasisprotocol/sapphire-contracts/contracts/auth/SiweAuth.sol";
+import {CalldataEncryption} from "./CalldataEncryption.sol";
 
 /// @title uRWA-20 Token Contract
 /// @notice An ERC-20 token implementation adhering to the IERC-7943 interface for Real World Assets.
@@ -879,6 +880,285 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControlEnumerable, IERC165) returns (bool) {
         return interfaceId == type(IERC7943Fungible).interfaceId ||
             super.supportsInterface(interfaceId);
+    }
+
+    /// @notice Helper function to create encrypted calldata for transactions.
+    /// @dev This function is called client-side to encrypt transaction parameters.
+    /// The encrypted data is then sent to executeEncrypted().
+    /// @param selector The function selector (first 4 bytes of keccak256 of function signature).
+    /// @param params ABI-encoded parameters for the function.
+    /// @return Encrypted calldata that can be passed to executeEncrypted().
+    function makeEncryptedTransaction(
+        bytes4 selector,
+        bytes memory params
+    ) external view returns (bytes memory) {
+        return CalldataEncryption.encryptCallData(
+            abi.encode(selector, params)
+        );
+    }
+
+    /// @notice Executes a transaction with encrypted calldata.
+    /// @dev Decrypts the calldata (automatically by Sapphire runtime) and routes to appropriate internal functions.
+    /// This is the main entry point for all encrypted write operations.
+    /// @param encryptedData The encrypted calldata containing function selector and parameters.
+    function executeEncrypted(bytes memory encryptedData) external payable {
+        // Sapphire runtime automatically decrypts the calldata
+        (bytes4 selector, bytes memory params) = abi.decode(encryptedData, (bytes4, bytes));
+
+        // Route to appropriate internal function based on selector
+        if (selector == this.transfer.selector) {
+            (address to, uint256 amount) = abi.decode(params, (address, uint256));
+            _executeTransfer(_msgSender(), to, amount);
+        } else if (selector == this.transferFrom.selector) {
+            (address from, address to, uint256 amount) = abi.decode(params, (address, address, uint256));
+            _executeTransferFrom(from, to, amount);
+        } else if (selector == this.approve.selector) {
+            (address spender, uint256 amount) = abi.decode(params, (address, uint256));
+            _executeApprove(_msgSender(), spender, amount);
+        } else if (selector == this.mint.selector) {
+            (address to, uint256 amount) = abi.decode(params, (address, uint256));
+            _executeMint(to, amount);
+        } else if (selector == this.burn.selector) {
+            (uint256 amount) = abi.decode(params, (uint256));
+            _executeBurn(_msgSender(), amount);
+        } else if (selector == this.changeWhitelist.selector) {
+            (address account, bool status) = abi.decode(params, (address, bool));
+            _executeChangeWhitelist(account, status);
+        } else if (selector == this.setFrozenTokens.selector) {
+            (address account, uint256 amount) = abi.decode(params, (address, uint256));
+            _executeSetFrozenTokens(account, amount);
+        } else if (selector == this.forcedTransfer.selector) {
+            (address from, address to, uint256 amount) = abi.decode(params, (address, address, uint256));
+            _executeForcedTransfer(from, to, amount);
+        } else if (selector == bytes4(keccak256("permit(address,address,uint256,uint256,uint8,bytes32,bytes32)"))) {
+            (address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) =
+                abi.decode(params, (address, address, uint256, uint256, uint8, bytes32, bytes32));
+            _executePermit(owner, spender, value, deadline, v, r, s);
+        } else {
+            revert("Invalid function selector");
+        }
+    }
+
+    /// @notice Internal function to execute transfer with encrypted calldata.
+    function _executeTransfer(address from, address to, uint256 amount) internal returns (bool) {
+        require(_isWhitelisted(from), ERC7943CannotTransact(from));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+
+        uint256 fromBalance = super.balanceOf(from);
+        require(fromBalance >= amount, InsufficientBalance());
+        uint256 unfrozenFromBalance = _unfrozenBalance(from);
+        require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
+
+        _updateBalanceWithoutEvent(from, to, amount);
+
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            amount,
+            "transfer",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedTransfer(encrypted);
+
+        Sapphire.padGas(200000);
+        return true;
+    }
+
+    /// @notice Internal function to execute transferFrom with encrypted calldata.
+    function _executeTransferFrom(address from, address to, uint256 amount) internal returns (bool) {
+        require(_isWhitelisted(from), ERC7943CannotTransact(from));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+
+        uint256 fromBalance = super.balanceOf(from);
+        require(fromBalance >= amount, InsufficientBalance());
+        uint256 unfrozenFromBalance = _unfrozenBalance(from);
+        require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
+
+        address spender = _msgSender();
+        uint256 currentAllowance = super.allowance(from, spender);
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= amount, InsufficientAllowance());
+            /// @solidity memory-safe-assembly
+            assembly {
+                mstore(0x20, spender)
+                mstore(0x0c, or(shl(96, from), _ALLOWANCE_SLOT_SEED))
+                let allowanceSlot := keccak256(0x0c, 0x34)
+                sstore(allowanceSlot, sub(sload(allowanceSlot), amount))
+            }
+        }
+
+        _updateBalanceWithoutEvent(from, to, amount);
+
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            amount,
+            "transferFrom",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedTransfer(encrypted);
+
+        Sapphire.padGas(200000);
+        return true;
+    }
+
+    /// @notice Internal function to execute approve with encrypted calldata.
+    function _executeApprove(address owner, address spender, uint256 amount) internal returns (bool) {
+        require(_isWhitelisted(owner), ERC7943CannotTransact(owner));
+        require(_isWhitelisted(spender), ERC7943CannotTransact(spender));
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x20, spender)
+            mstore(0x0c, or(shl(96, owner), _ALLOWANCE_SLOT_SEED))
+            sstore(keccak256(0x0c, 0x34), amount)
+        }
+
+        bytes memory plaintext = abi.encode(
+            owner,
+            spender,
+            amount,
+            "approve",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedApproval(encrypted);
+
+        return true;
+    }
+
+    /// @notice Internal function to execute permit with encrypted calldata.
+    function _executePermit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal {
+        require(_isWhitelisted(owner), ERC7943CannotTransact(owner));
+        require(_isWhitelisted(spender), ERC7943CannotTransact(spender));
+
+        super.permit(owner, spender, value, deadline, v, r, s);
+
+        bytes memory plaintext = abi.encode(
+            owner,
+            spender,
+            value,
+            "permit",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedApproval(encrypted);
+    }
+
+    /// @notice Internal function to execute mint with encrypted calldata.
+    function _executeMint(address to, uint256 amount) internal {
+        require(hasRole(MINTER_ROLE, _msgSender()), "AccessControl: account missing role");
+        _mint(to, amount);
+    }
+
+    /// @notice Internal function to execute burn with encrypted calldata.
+    function _executeBurn(address from, uint256 amount) internal {
+        require(hasRole(BURNER_ROLE, _msgSender()), "AccessControl: account missing role");
+        _burn(from, amount);
+    }
+
+    /// @notice Internal function to execute changeWhitelist with encrypted calldata.
+    function _executeChangeWhitelist(address account, bool status) internal {
+        require(hasRole(WHITELIST_ROLE, _msgSender()), "AccessControl: account missing role");
+        _whitelist[account] = status;
+
+        bytes memory plaintext = abi.encode(account, status, _eventNonce);
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedWhitelisted(encrypted);
+    }
+
+    /// @notice Internal function to execute setFrozenTokens with encrypted calldata.
+    function _executeSetFrozenTokens(address account, uint256 amount) internal returns(bool result) {
+        require(hasRole(FREEZING_ROLE, _msgSender()), "AccessControl: account missing role");
+        _frozenTokens[account] = amount;
+
+        bytes memory plaintext = abi.encode(account, amount, _eventNonce);
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedFrozen(encrypted);
+
+        result = true;
+    }
+
+    /// @notice Internal function to execute forcedTransfer with encrypted calldata.
+    function _executeForcedTransfer(address from, address to, uint256 amount) internal returns(bool result) {
+        require(hasRole(FORCE_TRANSFER_ROLE, _msgSender()), "AccessControl: account missing role");
+        require(from != address(0) && to != address(0), NotZeroAddress());
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+        uint256 fromBalance = super.balanceOf(from);
+        require(fromBalance >= amount, InsufficientBalance());
+        _excessFrozenUpdate(from, amount);
+
+        _updateBalanceWithoutEvent(from, to, amount);
+
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            amount,
+            "forcedTransfer",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this))
+        );
+        emit EncryptedForcedTransfer(encrypted);
+
+        Sapphire.padGas(200000);
+        result = true;
     }
 }
 
