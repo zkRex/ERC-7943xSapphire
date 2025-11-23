@@ -380,13 +380,18 @@ describe("uRWA20", function () {
       // Verify otherAccount does NOT have BURNER_ROLE
       const burnerRole = await token.read.BURNER_ROLE();
       expect(await token.read.hasRole([burnerRole, getAddress(otherAccount.account.address)])).to.be.false;
-      
+
       // otherAccount does NOT have BURNER_ROLE, so this should revert
-      const config = { client: { public: publicClient, wallet: otherAccount } };
-      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        tokenAsOther.write.burn([parseEther("50")])
+        otherAccount.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'burn',
+          args: [parseEther("50")],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
   });
@@ -418,16 +423,18 @@ describe("uRWA20", function () {
       // Verify otherAccount does NOT have FREEZING_ROLE
       const freezingRole = await token.read.FREEZING_ROLE();
       expect(await token.read.hasRole([freezingRole, getAddress(otherAccount.account.address)])).to.be.false;
-      
+
       // otherAccount does NOT have FREEZING_ROLE, so this should revert
-      const config = { client: { public: publicClient, wallet: otherAccount } };
-      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        tokenAsOther.write.setFrozenTokens([
-          getAddress(thirdAccount.account.address),
-          parseEther("50"),
-        ])
+        otherAccount.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'setFrozenTokens',
+          args: [getAddress(thirdAccount.account.address), parseEther("50")],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
   });
@@ -491,14 +498,17 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(hash3, publicClient);
 
-      const config = { client: { public: publicClient, wallet: owner } };
-      const tokenAsOwner = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
+      // Owner is NOT whitelisted, so transfer should revert
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        tokenAsOwner.write.transfer([
-          getAddress(otherAccount.account.address),
-          parseEther("50"),
-        ])
+        owner.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'transfer',
+          args: [getAddress(otherAccount.account.address), parseEther("50")],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
 
@@ -515,14 +525,17 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(mintHash, publicClient);
 
-      const config = { client: { public: publicClient, wallet: owner } };
-      const tokenAsOwner = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
+      // otherAccount is NOT whitelisted, so transfer should revert
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        tokenAsOwner.write.transfer([
-          getAddress(otherAccount.account.address),
-          parseEther("50"),
-        ])
+        owner.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'transfer',
+          args: [getAddress(otherAccount.account.address), parseEther("50")],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
 
@@ -562,15 +575,17 @@ describe("uRWA20", function () {
         parseEther("50"),
       ])).to.be.false;
 
-      const config = { client: { public: publicClient, wallet: owner } };
-      const tokenAsOwner = await hre.viem.getContractAt("uRWA20", token.address, config);
-      
       // Should revert because only 40 tokens are unfrozen, but trying to transfer 50
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+
       await expect(
-        tokenAsOwner.write.transfer([
-          getAddress(otherAccount.account.address),
-          parseEther("50"),
-        ])
+        owner.writeContractSync({
+          address: token.address,
+          abi: abi.abi,
+          functionName: 'transfer',
+          args: [getAddress(otherAccount.account.address), parseEther("50")],
+          throwOnReceiptRevert: true
+        })
       ).to.be.rejected;
     });
   });
