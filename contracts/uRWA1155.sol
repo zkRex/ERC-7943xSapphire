@@ -211,22 +211,17 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
         _excessFrozenUpdate(from, tokenId, amount);
 
-        uint256[] memory ids = new uint256[](1);
-        uint256[] memory values = new uint256[](1);
-        ids[0] = tokenId;
-        values[0] = amount;
-
-        super._update(from, to, ids, values);
+        // Update balances directly without calling super._update() to avoid emitting Transfer events
+        // This preserves privacy by only emitting encrypted events
+        require(_balances[tokenId][from] >= amount, ERC1155InsufficientBalance(from, _balances[tokenId][from], amount, tokenId));
+        unchecked {
+            _balances[tokenId][from] -= amount;
+            _balances[tokenId][to] += amount;
+        }
         
         if (to != address(0)) {
             address operator = _msgSender();
-            if (ids.length == 1) {
-                uint256 id = ids[0];
-                uint256 value = values[0];
-                ERC1155Utils.checkOnERC1155Received(operator, from, to, id, value, "");
-            } else {
-                ERC1155Utils.checkOnERC1155BatchReceived(operator, from, to, ids, values, "");
-            }
+            ERC1155Utils.checkOnERC1155Received(operator, from, to, tokenId, amount, "");
         } 
 
         // Encrypt sensitive event data
