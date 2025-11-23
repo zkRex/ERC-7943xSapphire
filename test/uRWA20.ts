@@ -1,15 +1,60 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import { getAddress, parseEther, keccak256, encodePacked } from "viem";
-import { readContract } from "viem/actions";
+import { simulateContract, readContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
+import { SiweMessage } from "siwe";
 
 const itIfSupportsEventLogs =
   hre.network.name === "sapphire-localnet" ? it.skip : it;
 
+const sessionTokens = new Map<string, string>();
+
+async function loginAndGetToken(
+  tokenContract: any,
+  walletClient: any,
+  chainId: number
+): Promise<string> {
+  const address = walletClient.account.address;
+
+  if (sessionTokens.has(address)) {
+    return sessionTokens.get(address)!;
+  }
+
+  const domain = await tokenContract.read.domain();
+
+  const siweMsg = new SiweMessage({
+    domain,
+    address,
+    uri: `http://${domain}`,
+    version: "1",
+    chainId,
+    statement: "Sign in to access uRWA20 token",
+    issuedAt: new Date().toISOString(),
+  });
+
+  const message = siweMsg.prepareMessage();
+
+  const signature = await walletClient.signMessage({
+    message
+  });
+
+  const token = await tokenContract.read.login([message, signature]);
+
+  sessionTokens.set(address, token);
+
+  return token;
+}
+
+function clearSessionTokens() {
+  sessionTokens.clear();
+}
+
 describe("uRWA20", function () {
-  this.timeout(120000); // 2 minutes timeout for all tests
+  // Use shorter timeout for local networks (30s), longer for remote (2min)
+  const isLocalNetwork = hre.network.name === "sapphire-localnet" || hre.network.name === "hardhat";
+  this.timeout(isLocalNetwork ? 30000 : 120000);
   
   let token: any;
   let owner: any;
@@ -17,40 +62,51 @@ describe("uRWA20", function () {
   let thirdAccount: any;
   let publicClient: any;
   
-  // Helper to read from contract with signed queries on Sapphire
-  // On Sapphire, view calls must be signed to have a non-zero msg.sender.
-  // Viem's contract.read.* uses the public client, so we use readContract with wallet client.
+  // Helper to read from contract with SIWE authentication on Sapphire
+  // On Sapphire, view calls must include a SIWE token for authentication.
   async function readToken(
     functionName: any,
     args: any[] = [],
     walletClient: any = owner
   ): Promise<any> {
     if (hre.network.name === "sapphire-localnet") {
-      // On Sapphire, use readContract with wallet client to sign the query
+      const sessionToken = await loginAndGetToken(
+        token,
+        walletClient,
+        sapphireLocalnetChain.id
+      );
+
+      const argsWithToken = [...args, sessionToken];
+
       const abi = await hre.artifacts.readArtifact("uRWA20");
       return readContract(walletClient, {
         address: token.address,
         abi: abi.abi,
         functionName,
-        args,
+        args: argsWithToken,
         account: walletClient.account,
       } as any);
     } else {
-      // For non-Sapphire networks, use regular contract.read
-      return (token.read as any)[functionName](args);
+      const argsWithToken = [...args, "0x"];
+      return (token.read as any)[functionName](argsWithToken);
     }
   }
 
   async function deployTokenFixture() {
     const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
-    
+
     const [ownerWallet, otherAccountWallet, thirdAccountWallet] = await hre.viem.getWalletClients({ chain });
     const client = await hre.viem.getPublicClient({ chain });
     const config = { client: { public: client, wallet: ownerWallet } };
-    
+
     const tokenContract = await hre.viem.deployContract(
       "uRWA20",
-      ["Test Token", "TEST", ownerWallet.account.address],
+      [
+        "Test Token",
+        "TEST",
+        ownerWallet.account.address,
+        "localhost:3000"
+      ],
       config
     );
 
@@ -88,6 +144,8 @@ describe("uRWA20", function () {
     otherAccount = fixture.otherAccount;
     thirdAccount = fixture.thirdAccount;
     publicClient = fixture.publicClient;
+
+    clearSessionTokens();
   });
 
   describe("Deployment", function () {
