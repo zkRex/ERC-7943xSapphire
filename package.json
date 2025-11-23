@@ -16,7 +16,10 @@
     "test:all:testnet": "hardhat test --network sapphire-testnet > test-results-all-$(date +%Y%m%d-%H%M%S).log 2>&1",
     "deploy:urwa20:localnet": "hardhat ignition deploy ignition/modules/uRWA20.ts --network sapphire-localnet",
     "deploy:urwa20:testnet": "hardhat ignition deploy ignition/modules/uRWA20.ts --network sapphire-testnet",
-    "deploy:urwa20:mainnet": "hardhat ignition deploy ignition/modules/uRWA20.ts --network sapphire"
+    "deploy:urwa20:mainnet": "hardhat ignition deploy ignition/modules/uRWA20.ts --network sapphire",
+    "check-balance": "ts-node scripts/check-balance.ts",
+    "check-balance:testnet": "ts-node scripts/check-balance.ts sapphire-testnet",
+    "check-balance:mainnet": "ts-node scripts/check-balance.ts sapphire"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.3",

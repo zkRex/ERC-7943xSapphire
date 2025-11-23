@@ -65,7 +65,7 @@ task("check-secret")
 
     await new Promise((resolve) => setTimeout(resolve, 30_000));
     console.log("Checking the secret again");
-    const secret = await vigil.read.revealSecret([0n]);
+    const secret = await vigil.read.revealSecret([0n]) as `0x${string}`;
     console.log(
       "The secret ingredient is",
       Buffer.from(secret.slice(2), "hex").toString(),
