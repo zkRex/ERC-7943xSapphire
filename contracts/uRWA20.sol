@@ -209,7 +209,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account);
-        if(amount > unfrozenBalance && amount <= balanceOf(account)) {
+        if(amount > unfrozenBalance && amount <= _balances[account]) {
             _frozenTokens[account] -= amount - unfrozenBalance;
             
             // Encrypt sensitive event data
@@ -227,7 +227,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param account The address to calculate unfrozen balance for.
     /// @return unfrozenBalance The amount of tokens available for transfer.
     function _unfrozenBalance(address account) internal view returns(uint256 unfrozenBalance) {
-        unfrozenBalance = balanceOf(account) < _frozenTokens[account] ? 0 : balanceOf(account) - _frozenTokens[account];
+        unfrozenBalance = _balances[account] < _frozenTokens[account] ? 0 : _balances[account] - _frozenTokens[account];
     }
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
