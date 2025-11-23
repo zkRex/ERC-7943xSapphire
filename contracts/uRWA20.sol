@@ -16,7 +16,7 @@ import {CalldataEncryption} from "./CalldataEncryption.sol";
 /// controlled minting/burning, asset forced transfers, and freezing. Managed via AccessControl.
 contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, SiweAuth {
     /// @notice Role identifiers.
-    // bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     // bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant FREEZING_ROLE = keccak256("FREEZING_ROLE");
     bytes32 public constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
@@ -119,7 +119,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         _name = name_;
         _symbol = symbol_;
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
-        // _grantRole(MINTER_ROLE, initialAdmin);
+        _grantRole(MINTER_ROLE, initialAdmin);
         // _grantRole(BURNER_ROLE, initialAdmin);
         _grantRole(FREEZING_ROLE, initialAdmin);
         _grantRole(WHITELIST_ROLE, initialAdmin);
@@ -589,15 +589,15 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         emit EncryptedWhitelisted(encrypted);
     }
 
-    // /// @notice Creates `amount` new tokens and assigns them to `to`.
-    // /// @dev Can only be called by accounts holding the `MINTER_ROLE`.
-    // /// Requires `to` to be allowed according to {canTransact}.
-    // /// Does NOT emit standard Transfer events (only encrypted events for privacy).
-    // /// @param to The address that will receive the minted tokens.
-    // /// @param amount The amount of tokens to mint.
-    // function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
-    //     _mint(to, amount);
-    // }
+    /// @notice Creates `amount` new tokens and assigns them to `to`.
+    /// @dev Can only be called by accounts holding the `MINTER_ROLE`.
+    /// Requires `to` to be allowed according to {canTransact}.
+    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
+    /// @param to The address that will receive the minted tokens.
+    /// @param amount The amount of tokens to mint.
+    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
+        _mint(to, amount);
+    }
 
     // /// @notice Destroys `amount` tokens from the caller's account.
     // /// @dev Can only be called by accounts holding the `BURNER_ROLE`.
@@ -607,35 +607,35 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     //     _burn(_msgSender(), amount);
     // }
 
-    // /// @dev Overrides Solady's _mint to update balances without emitting Transfer events.
-    // /// @param to The address that will receive the minted tokens.
-    // /// @param amount The amount of tokens to mint.
-    // function _mint(address to, uint256 amount) internal virtual override {
-    //     require(_isWhitelisted(to), ERC7943CannotTransact(to));
+    /// @dev Overrides Solady's _mint to update balances without emitting Transfer events.
+    /// @param to The address that will receive the minted tokens.
+    /// @param amount The amount of tokens to mint.
+    function _mint(address to, uint256 amount) internal virtual override {
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
 
-    //     // Update balances directly without emitting Transfer event
-    //     _updateBalanceWithoutEvent(address(0), to, amount);
+        // Update balances directly without emitting Transfer event
+        _updateBalanceWithoutEvent(address(0), to, amount);
 
-    //     // Emit only encrypted event with action, timestamp, and nonce
-    //     bytes memory plaintext = abi.encode(
-    //         address(0),
-    //         to,
-    //         amount,
-    //         "mint",
-    //         block.timestamp,
-    //         _eventNonce
-    //     );
-    //     bytes32 nonce = bytes32(_eventNonce++);
-    //     bytes memory encrypted = Sapphire.encrypt(
-    //         _encryptionKey,
-    //         nonce,
-    //         plaintext,
-    //         abi.encode(address(this)) // Bind to contract address
-    //     );
-    //     emit EncryptedTransfer(encrypted);
+        // Emit only encrypted event with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            address(0),
+            to,
+            amount,
+            "mint",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
+        emit EncryptedTransfer(encrypted);
 
-    //     Sapphire.padGas(200000);
-    // }
+        Sapphire.padGas(200000);
+    }
 
     /// @dev Hook called before token transfer (Solady pattern).
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {}
@@ -920,9 +920,9 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         } else if (selector == this.approve.selector) {
             (address spender, uint256 amount) = abi.decode(params, (address, uint256));
             _executeApprove(_msgSender(), spender, amount);
-        // } else if (selector == this.mint.selector) {
-        //     (address to, uint256 amount) = abi.decode(params, (address, uint256));
-        //     _executeMint(to, amount);
+        } else if (selector == this.mint.selector) {
+            (address to, uint256 amount) = abi.decode(params, (address, uint256));
+            _executeMint(to, amount);
         // } else if (selector == this.burn.selector) {
         //     (uint256 amount) = abi.decode(params, (uint256));
         //     _executeBurn(_msgSender(), amount);
@@ -1148,11 +1148,11 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         emit EncryptedApproval(encrypted);
     }
 
-    // /// @notice Internal function to execute mint with encrypted calldata.
-    // function _executeMint(address to, uint256 amount) internal {
-    //     require(hasRole(MINTER_ROLE, _msgSender()), "AccessControl: account missing role");
-    //     _mint(to, amount);
-    // }
+    /// @notice Internal function to execute mint with encrypted calldata.
+    function _executeMint(address to, uint256 amount) internal {
+        require(hasRole(MINTER_ROLE, _msgSender()), "AccessControl: account missing role");
+        _mint(to, amount);
+    }
 
     // /// @notice Internal function to execute burn with encrypted calldata.
     // function _executeBurn(address from, uint256 amount) internal {
