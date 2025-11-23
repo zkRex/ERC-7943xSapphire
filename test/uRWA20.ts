@@ -885,14 +885,13 @@ describe("uRWA20", function () {
       ], otherAccount)).to.equal(parseEther("50"));
     });
 
-    it("Should revert view calls from unauthorized accounts", async function () {
-      // Get a new account without VIEWER_ROLE (use 4th account if available, or revoke from thirdAccount)
+    it("Should allow owners to read their own allowances without VIEWER_ROLE", async function () {
+      // Get a new account without VIEWER_ROLE
       const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
       const allWallets = await hre.viem.getWalletClients({ chain });
       const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
       
       // If using thirdAccount, revoke VIEWER_ROLE temporarily
-      // Compute VIEWER_ROLE directly to avoid read call issues
       const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
       let needsRevoke = false;
       if (unauthorizedWallet === thirdAccount) {
@@ -910,7 +909,158 @@ describe("uRWA20", function () {
       // Verify unauthorized account does NOT have VIEWER_ROLE
       expect(await token.read.hasRole([viewerRole, getAddress(unauthorizedWallet.account.address)])).to.be.false;
 
-      // Verify view calls revert
+      // Setup: whitelist both accounts and mint tokens
+      const whitelistHash1 = await token.write.changeWhitelist([
+        getAddress(unauthorizedWallet.account.address),
+        true,
+      ]);
+      await waitForTx(whitelistHash1, publicClient);
+
+      const whitelistHash2 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      await waitForTx(whitelistHash2, publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(unauthorizedWallet.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      // Approve owner to spend tokens
+      const config = { client: { public: publicClient, wallet: unauthorizedWallet } };
+      const tokenAsUnauthorized = await hre.viem.getContractAt("uRWA20", token.address, config);
+      const approveHash = await tokenAsUnauthorized.write.approve([
+        getAddress(owner.account.address),
+        parseEther("50"),
+      ]);
+      await waitForTx(approveHash, publicClient);
+
+      // Verify unauthorizedWallet (owner of tokens) can read their own allowance without VIEWER_ROLE
+      expect(await readToken("allowance", [
+        getAddress(unauthorizedWallet.account.address),
+        getAddress(owner.account.address),
+      ], unauthorizedWallet)).to.equal(parseEther("50"));
+
+      // Restore VIEWER_ROLE if we revoked it
+      if (needsRevoke) {
+        const grantHash = await token.write.grantRole([
+          viewerRole,
+          getAddress(thirdAccount.account.address),
+        ]);
+        await waitForTx(grantHash, publicClient);
+      }
+    });
+
+    it("Should allow users to read their own data without VIEWER_ROLE", async function () {
+      // Get a new account without VIEWER_ROLE (use 4th account if available, or revoke from thirdAccount)
+      const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+      const allWallets = await hre.viem.getWalletClients({ chain });
+      const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
+      
+      // If using thirdAccount, revoke VIEWER_ROLE temporarily
+      const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
+      let needsRevoke = false;
+      if (unauthorizedWallet === thirdAccount) {
+        const hasRole = await token.read.hasRole([viewerRole, getAddress(thirdAccount.account.address)]);
+        if (hasRole) {
+          needsRevoke = true;
+          const revokeHash = await token.write.revokeRole([
+            viewerRole,
+            getAddress(thirdAccount.account.address),
+          ]);
+          await waitForTx(revokeHash, publicClient);
+        }
+      }
+
+      // Verify unauthorized account does NOT have VIEWER_ROLE
+      expect(await token.read.hasRole([viewerRole, getAddress(unauthorizedWallet.account.address)])).to.be.false;
+
+      // Setup: whitelist and mint tokens to unauthorizedWallet
+      const whitelistHash = await token.write.changeWhitelist([
+        getAddress(unauthorizedWallet.account.address),
+        true,
+      ]);
+      await waitForTx(whitelistHash, publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(unauthorizedWallet.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      const freezeHash = await token.write.setFrozenTokens([
+        getAddress(unauthorizedWallet.account.address),
+        parseEther("30"),
+      ]);
+      await waitForTx(freezeHash, publicClient);
+
+      // Verify users CAN read their own data without VIEWER_ROLE
+      expect(await readToken("balanceOf", [getAddress(unauthorizedWallet.account.address)], unauthorizedWallet))
+        .to.equal(parseEther("100"));
+
+      expect(await readToken("canTransact", [getAddress(unauthorizedWallet.account.address)], unauthorizedWallet))
+        .to.be.true;
+
+      expect(await readToken("getFrozenTokens", [getAddress(unauthorizedWallet.account.address)], unauthorizedWallet))
+        .to.equal(parseEther("30"));
+
+      // Verify users CAN check their own transfer permissions
+      expect(await readToken("canTransfer", [
+        getAddress(unauthorizedWallet.account.address),
+        getAddress(owner.account.address),
+        parseEther("50"),
+      ], unauthorizedWallet)).to.be.true;
+
+      // Restore VIEWER_ROLE if we revoked it
+      if (needsRevoke) {
+        const grantHash = await token.write.grantRole([
+          viewerRole,
+          getAddress(thirdAccount.account.address),
+        ]);
+        await waitForTx(grantHash, publicClient);
+      }
+    });
+
+    it("Should revert view calls from unauthorized accounts reading other users' data", async function () {
+      // Get a new account without VIEWER_ROLE (use 4th account if available, or revoke from thirdAccount)
+      const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+      const allWallets = await hre.viem.getWalletClients({ chain });
+      const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
+      
+      // If using thirdAccount, revoke VIEWER_ROLE temporarily
+      const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
+      let needsRevoke = false;
+      if (unauthorizedWallet === thirdAccount) {
+        const hasRole = await token.read.hasRole([viewerRole, getAddress(thirdAccount.account.address)]);
+        if (hasRole) {
+          needsRevoke = true;
+          const revokeHash = await token.write.revokeRole([
+            viewerRole,
+            getAddress(thirdAccount.account.address),
+          ]);
+          await waitForTx(revokeHash, publicClient);
+        }
+      }
+
+      // Verify unauthorized account does NOT have VIEWER_ROLE
+      expect(await token.read.hasRole([viewerRole, getAddress(unauthorizedWallet.account.address)])).to.be.false;
+
+      // Setup: whitelist and mint tokens to owner
+      const whitelistHash = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      await waitForTx(whitelistHash, publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(owner.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      // Verify unauthorized accounts CANNOT read other users' data
       await expect(
         readToken("balanceOf", [getAddress(owner.account.address)], unauthorizedWallet)
       ).to.be.rejected;
