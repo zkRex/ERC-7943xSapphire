@@ -1,7 +1,6 @@
 import hre from "hardhat";
 import { createWalletClient, createPublicClient, http, parseEther, formatEther, defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mnemonicToAccount } from "viem/accounts";
 import * as dotenv from "dotenv";
 import * as path from "path";
 
@@ -91,9 +90,13 @@ async function main() {
   // Get token ABI
   const tokenArtifact = await hre.artifacts.readArtifact("uRWA20");
   
-  // Use admin account for whitelisting and minting
-  const adminMnemonic = process.env.ADMIN_MNEMONIC || "test test test test test test test test test test test junk";
-  const adminAccount = mnemonicToAccount(adminMnemonic, { accountIndex: 0 });
+  // Use PRIVATE_KEY (deployer account) for whitelisting and minting
+  // This account should have DEFAULT_ADMIN_ROLE and WHITELIST_ROLE
+  const deployerPrivateKey = process.env.PRIVATE_KEY;
+  if (!deployerPrivateKey) {
+    throw new Error("PRIVATE_KEY environment variable is required for whitelisting and minting");
+  }
+  const adminAccount = privateKeyToAccount(deployerPrivateKey as `0x${string}`);
   const adminWalletClient = createWalletClient({
     account: adminAccount,
     chain,
