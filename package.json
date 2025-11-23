@@ -19,7 +19,8 @@
     "deploy:urwa20:mainnet": "hardhat ignition deploy ignition/modules/uRWA20.ts --network sapphire",
     "check-balance": "ts-node scripts/check-balance.ts",
     "check-balance:testnet": "ts-node scripts/check-balance.ts sapphire-testnet",
-    "check-balance:mainnet": "ts-node scripts/check-balance.ts sapphire"
+    "check-balance:mainnet": "ts-node scripts/check-balance.ts sapphire",
+    "send-to-address:testnet": "ts-node scripts/send-to-address.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.3",
