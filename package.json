@@ -21,7 +21,8 @@
     "check-balance:testnet": "ts-node scripts/check-balance.ts sapphire-testnet",
     "check-balance:mainnet": "ts-node scripts/check-balance.ts sapphire",
     "send-to-address:testnet": "ts-node scripts/send-to-address.ts",
-    "create-key-and-fund:testnet": "ts-node scripts/create-key-and-fund.ts"
+    "create-key-and-fund:testnet": "ts-node scripts/create-key-and-fund.ts",
+    "demo": "tsx demo/demo.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.3",
