@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import { getAddress, keccak256, encodePacked } from "viem";
-import { readContract } from "viem/actions";
+import { simulateContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
 
@@ -17,22 +17,24 @@ describe("uRWA721", function () {
 
   // Helper to read from contract with signed queries on Sapphire
   // On Sapphire, view calls must be signed to have a non-zero msg.sender.
-  // Viem's contract.read.* uses the public client, so we use readContract with wallet client.
+  // readContract doesn't sign calls, so we use simulateContract instead which signs the call.
+  // This ensures msg.sender is set correctly for VIEWER_ROLE checks.
   async function readToken(
     functionName: any,
     args: any[] = [],
     walletClient: any = owner
   ): Promise<any> {
     if (hre.network.name === "sapphire-localnet") {
-      // On Sapphire, use readContract with wallet client to sign the query
+      // On Sapphire, use simulateContract to sign the query (required for VIEWER_ROLE checks)
       const abi = await hre.artifacts.readArtifact("uRWA721");
-      return readContract(walletClient, {
+      const result = await simulateContract(walletClient, {
         address: token.address,
         abi: abi.abi,
         functionName,
         args,
         account: walletClient.account,
       } as any);
+      return result.result;
     } else {
       // For non-Sapphire networks, use regular contract.read
       return (token.read as any)[functionName](args);
