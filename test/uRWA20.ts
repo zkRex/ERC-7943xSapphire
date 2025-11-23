@@ -96,10 +96,19 @@ describe("uRWA20", function () {
   }
 
   async function deployTokenFixture() {
-    const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+    const useSapphireLocalnet = hre.network.name === "sapphire-localnet";
+    const chain = useSapphireLocalnet ? sapphireLocalnetChain : undefined;
 
-    const [ownerWallet, otherAccountWallet, thirdAccountWallet] = await hre.viem.getWalletClients({ chain });
-    const client = await hre.viem.getPublicClient({ chain });
+    // Only pass an explicit chain when we're on Sapphire localnet; letting Hardhat
+    // supply its built-in chain avoids viem throwing `ChainNotFoundError`.
+    const walletClients = useSapphireLocalnet
+      ? await hre.viem.getWalletClients({ chain })
+      : await hre.viem.getWalletClients();
+    const [ownerWallet, otherAccountWallet, thirdAccountWallet] = walletClients;
+
+    const client = useSapphireLocalnet
+      ? await hre.viem.getPublicClient({ chain })
+      : await hre.viem.getPublicClient();
     const config = { client: { public: client, wallet: ownerWallet } };
 
     const tokenContract = await hre.viem.deployContract(
@@ -427,11 +436,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -444,7 +455,7 @@ describe("uRWA20", function () {
         parseEther("50"),
       ]);
       await waitForTx(transferHash, publicClient);
-      
+
       expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
       expect(await readToken("balanceOf", [getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
     });
@@ -518,11 +529,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -566,11 +579,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -640,11 +655,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -664,11 +681,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -730,11 +749,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
@@ -907,4 +928,3 @@ describe("uRWA20", function () {
     });
   });
 });
-
