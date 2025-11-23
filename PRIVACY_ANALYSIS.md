@@ -242,12 +242,12 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
    
    **Step 1: Install Solady (Recommended - actively maintained)**
    ```bash
-   npm install solady
+   pnpm add solady
    ```
    
    Or install Solmate (no longer actively maintained):
    ```bash
-   npm install solmate
+   pnpm add solmate
    ```
    
    **Step 2: Update Imports**
