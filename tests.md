@@ -203,14 +203,14 @@ WaitForTransactionReceiptTimeoutError: Timed out while waiting for transaction w
 - Transaction never confirms on localnet
 - Test times out after viem's internal timeout
 
-**Root Cause Identified**: ✅
+**Root Cause Identified**: [PASS]
 The issue was caused by a **race condition with parallel transaction submission**. The test used `waitForTxs([hash1, hash2], publicClient)` to wait for multiple transactions simultaneously:
 
 ```typescript
 // PROBLEMATIC CODE
 const hash1 = await token.write.changeWhitelist([owner.account.address, true]);
 const hash2 = await token.write.changeWhitelist([otherAccount.account.address, true]);
-await waitForTxs([hash1, hash2], publicClient); // ❌ Race condition
+await waitForTxs([hash1, hash2], publicClient); // [FAIL] Race condition
 ```
 
 When submitting transactions rapidly in succession, viem can assign them conflicting nonces, causing:
@@ -218,21 +218,21 @@ When submitting transactions rapidly in succession, viem can assign them conflic
 - Transaction hashes to be generated locally but never reach the network
 - Subsequent transactions to timeout waiting for confirmation
 
-**Solution Applied**: ✅
+**Solution Applied**: [PASS]
 Changed all instances of parallel `waitForTxs()` to sequential `waitForTx()` calls:
 
 ```typescript
 // FIXED CODE
 const hash1 = await token.write.changeWhitelist([owner.account.address, true]);
-await waitForTx(hash1, publicClient); // ✅ Wait for first tx
+await waitForTx(hash1, publicClient); // [PASS] Wait for first tx
 
 const hash2 = await token.write.changeWhitelist([otherAccount.account.address, true]);
-await waitForTx(hash2, publicClient); // ✅ Wait for second tx
+await waitForTx(hash2, publicClient); // [PASS] Wait for second tx
 ```
 
 **Fix Location**: test/uRWA20.ts:307 (7 locations updated across the file)
 
-**Test Result After Fix**: ✅ PASSING
+**Test Result After Fix**: [PASS] PASSING
 ```
 ✔ Should allow transfer between whitelisted accounts (12450ms)
 ```
@@ -258,13 +258,13 @@ Error: Timeout of 30000ms exceeded. For async tests and hooks, ensure "done()" i
 - Test suite cannot proceed
 - All downstream tests fail due to blocked execution
 
-**Root Cause**: ✅ SAME AS FAILURE #4
+**Root Cause**: [PASS] SAME AS FAILURE #4
 This timeout was caused by the same race condition with parallel transaction submission. The hook likely contained code with the same `waitForTxs()` pattern that was causing FAILURE #4.
 
-**Solution Applied**: ✅
+**Solution Applied**: [PASS]
 The fix for FAILURE #4 (changing from parallel `waitForTxs()` to sequential `waitForTx()` calls) also resolves this issue since all 7 instances across the test file were updated.
 
-**Status**: ✅ LIKELY RESOLVED (cascading fix from FAILURE #4)
+**Status**: [PASS] LIKELY RESOLVED (cascading fix from FAILURE #4)
 
 ---
 
@@ -343,13 +343,13 @@ Error: Timeout of 30000ms exceeded. For async tests and hooks, ensure "done()\" 
 - Test suite cannot proceed
 - canTransfer tests cannot run
 
-**Root Cause**: ✅ CASCADING FROM FAILURES #6 AND #7
+**Root Cause**: [PASS] CASCADING FROM FAILURES #6 AND #7
 This timeout was caused by the forcedTransfer tests (FAILURES #6 and #7) not properly waiting for transaction completion. When tests use `.write.` methods, transactions may remain pending, causing subsequent test setup to timeout.
 
-**Solution Applied**: ✅
+**Solution Applied**: [PASS]
 The fix for FAILURES #6 and #7 (changing from `write.forcedTransfer()` to `writeContractSync()`) also resolves this issue. Once the forcedTransfer tests properly wait for transactions to complete, the canTransfer tests can proceed without timeouts.
 
-**Status**: ✅ RESOLVED (cascading fix from FAILURES #6 and #7)
+**Status**: [PASS] RESOLVED (cascading fix from FAILURES #6 and #7)
 
 ---
 
@@ -446,7 +446,7 @@ If `_update()` or `transfer()` calls this decryption:
 **Claimed**: "Updated Status (Current): [IMPLEMENTED] Critical gaps addressed! The project is now production-ready for regulated RWA use cases."
 
 **Previous Assessment**: FALSE - Test failures suggested critical issues
-**Current Assessment**: ✅ TRUE - All 34 tests passing, contract implementation verified correct
+**Current Assessment**: [PASS] TRUE - All 34 tests passing, contract implementation verified correct
 
 **Reality**:
 - 100% test pass rate (34/34)
@@ -460,7 +460,7 @@ If `_update()` or `transfer()` calls this decryption:
 **Claimed**: "Status: Ready for deployment and testing on Sapphire testnet/mainnet."
 
 **Previous Assessment**: FALSE - Appeared to have critical security flaws
-**Current Assessment**: ✅ TRUE - All security checks verified through comprehensive testing
+**Current Assessment**: [PASS] TRUE - All security checks verified through comprehensive testing
 
 **Reality**:
 - Access control properly enforced for all roles
@@ -474,13 +474,13 @@ If `_update()` or `transfer()` calls this decryption:
 **Claimed**: "Critical gaps addressed!"
 
 **Previous Assessment**: PARTIALLY FALSE - Tests suggested broken functionality
-**Current Assessment**: ✅ MOSTLY TRUE - Core functionality verified, encryption tests in progress
+**Current Assessment**: [PASS] MOSTLY TRUE - Core functionality verified, encryption tests in progress
 
 **Reality**:
-- Gap #1 (Access Control): ✅ WORKING - All role checks functioning properly
-- Gap #2 (Whitelist Enforcement): ✅ WORKING - Whitelist enforcement verified
-- Gap #3 (Event Decryption): 🚧 IN PROGRESS - Dedicated test suite being developed
-- Gap #4 (View Function Access Control): ✅ WORKING - 9 comprehensive tests passing
+- Gap #1 (Access Control): [PASS] WORKING - All role checks functioning properly
+- Gap #2 (Whitelist Enforcement): [PASS] WORKING - Whitelist enforcement verified
+- Gap #3 (Event Decryption): [WIP] IN PROGRESS - Dedicated test suite being developed
+- Gap #4 (View Function Access Control): [PASS] WORKING - 9 comprehensive tests passing
 
 **Revised Assessment**: TRUE - Critical gaps addressed, encryption testing in progress
 
@@ -490,20 +490,20 @@ If `_update()` or `transfer()` calls this decryption:
 
 | Component | Claimed Status | Test Status | Evidence | Risk Level |
 |-----------|----------------|-------------|----------|-----------|
-| Deployment | ✅ Working | ✅ 3/3 PASS | Deployment tests pass | LOW |
-| Interface Support | ✅ Implemented | ✅ 1/1 PASS | ERC7943 interface recognized | LOW |
-| Whitelist Query (canTransact) | ✅ Working | ✅ 3/3 PASS | All whitelist read tests pass | LOW |
-| Whitelist Mgmt | ✅ Working | ✅ 2/2 PASS | Whitelist changes work correctly | LOW |
-| Minting | ✅ Working | ✅ 3/3 PASS | All mint tests pass including role checks | LOW |
-| Burning | ✅ Working | ✅ 2/2 PASS | All burn tests pass including role checks | LOW |
-| Token Freezing | ✅ Working | ✅ 2/2 PASS | All freeze tests pass including role checks | LOW |
-| Transfer (Whitelisted) | ✅ Working | ✅ 4/4 PASS | All transfer restriction tests pass | LOW |
-| Transfer (Non-Whitelisted) | ✅ Enforced | ✅ PASS | Whitelist enforcement working correctly | LOW |
-| Forced Transfer | ✅ Working | ✅ 3/3 PASS | All forced transfer tests pass | LOW |
-| canTransfer Function | ✅ Working | ✅ 2/2 PASS | All canTransfer tests pass | LOW |
-| View Function Access Control | ✅ Working | ✅ 9/9 PASS | Comprehensive view function access control tests pass | LOW |
-| Event Decryption | [WIP] | 🚧 IN PROGRESS | New test suite `uRWA20_Encryption.ts` in development | MEDIUM |
-| Production Ready | "Yes" | ✅ YES | All 34 tests passing, ready for testnet deployment | LOW |
+| Deployment | [PASS] Working | [PASS] 3/3 PASS | Deployment tests pass | LOW |
+| Interface Support | [PASS] Implemented | [PASS] 1/1 PASS | ERC7943 interface recognized | LOW |
+| Whitelist Query (canTransact) | [PASS] Working | [PASS] 3/3 PASS | All whitelist read tests pass | LOW |
+| Whitelist Mgmt | [PASS] Working | [PASS] 2/2 PASS | Whitelist changes work correctly | LOW |
+| Minting | [PASS] Working | [PASS] 3/3 PASS | All mint tests pass including role checks | LOW |
+| Burning | [PASS] Working | [PASS] 2/2 PASS | All burn tests pass including role checks | LOW |
+| Token Freezing | [PASS] Working | [PASS] 2/2 PASS | All freeze tests pass including role checks | LOW |
+| Transfer (Whitelisted) | [PASS] Working | [PASS] 4/4 PASS | All transfer restriction tests pass | LOW |
+| Transfer (Non-Whitelisted) | [PASS] Enforced | [PASS] PASS | Whitelist enforcement working correctly | LOW |
+| Forced Transfer | [PASS] Working | [PASS] 3/3 PASS | All forced transfer tests pass | LOW |
+| canTransfer Function | [PASS] Working | [PASS] 2/2 PASS | All canTransfer tests pass | LOW |
+| View Function Access Control | [PASS] Working | [PASS] 9/9 PASS | Comprehensive view function access control tests pass | LOW |
+| Event Decryption | [WIP] | [WIP] IN PROGRESS | New test suite `uRWA20_Encryption.ts` in development | MEDIUM |
+| Production Ready | "Yes" | [PASS] YES | All 34 tests passing, ready for testnet deployment | LOW |
 
 ---
 
@@ -561,7 +561,7 @@ If `_update()` or `transfer()` calls this decryption:
 
 ## Recommendations
 
-### Short-term (Completed ✅)
+### Short-term (Completed [PASS])
 1. ~~Restore access control modifiers to `burn()` and `setFrozenTokens()`~~ - Never broken, test methodology issue resolved
 2. ~~Restore whitelist enforcement to `_update()` or `transfer()`~~ - Never broken, test methodology issue resolved
 3. ~~Investigate and fix timeout issues with transfer transactions~~ - Fixed by sequential transaction waiting
