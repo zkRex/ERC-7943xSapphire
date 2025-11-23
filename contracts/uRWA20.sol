@@ -7,12 +7,13 @@ import {ERC20} from "solady/src/tokens/ERC20.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
 import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
+import {SiweAuth} from "@oasisprotocol/sapphire-contracts/contracts/auth/SiweAuth.sol";
 
 /// @title uRWA-20 Token Contract
 /// @notice An ERC-20 token implementation adhering to the IERC-7943 interface for Real World Assets.
 /// @dev Combines standard ERC-20 functionality with RWA-specific features like whitelisting,
 /// controlled minting/burning, asset forced transfers, and freezing. Managed via AccessControl.
-contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
+contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, SiweAuth {
     /// @notice Role identifiers.
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
@@ -73,7 +74,13 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param name_ The name of the token.
     /// @param symbol_ The symbol of the token.
     /// @param initialAdmin The address to receive initial administrative and operational roles.
-    constructor(string memory name_, string memory symbol_, address initialAdmin) {
+    /// @param domain The domain for SIWE authentication.
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        address initialAdmin,
+        string memory domain
+    ) SiweAuth(domain) {
         _name = name_;
         _symbol = symbol_;
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
@@ -83,7 +90,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         _grantRole(WHITELIST_ROLE, initialAdmin);
         _grantRole(FORCE_TRANSFER_ROLE, initialAdmin);
         _grantRole(VIEWER_ROLE, initialAdmin);
-        
+
         // Generate encryption key for event encryption
         bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA20", name_, symbol_));
         _encryptionKey = bytes32(randomBytes);
@@ -100,14 +107,26 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         return _symbol;
     }
 
+    /// @notice Internal helper to get authenticated caller address.
+    /// @dev Checks msg.sender first (for transactions), then validates SIWE token (for view calls).
+    /// @param token Optional SIWE session token for authenticated view calls.
+    /// @return caller The authenticated caller address.
+    function _getAuthenticatedCaller(bytes memory token) internal view returns (address caller) {
+        if (msg.sender != address(0)) {
+            return msg.sender;
+        }
+        return authMsgSender(token);
+    }
+
     /// @inheritdoc IERC7943Fungible
     /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
-    function canTransfer(address from, address to, uint256 amount) public virtual override view returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
-        uint256 fromBalance = balanceOf(from);
+    function canTransfer(address from, address to, uint256 amount, bytes memory token) public virtual override view returns (bool allowed) {
+        address caller = _getAuthenticatedCaller(token);
+        require(hasRole(VIEWER_ROLE, caller), "Access denied");
+        uint256 fromBalance = super.balanceOf(from);
         if (fromBalance < _frozenTokens[from]) return allowed;
         if (amount > fromBalance - _frozenTokens[from]) return allowed;
-        if (!canTransact(from) || !canTransact(to)) return allowed;
+        if (!canTransact(from, token) || !canTransact(to, token)) return allowed;
         allowed = true;
     }
 
@@ -121,42 +140,50 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @inheritdoc IERC7943Fungible
     /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
-    function canTransact(address account) public virtual override view returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+    function canTransact(address account, bytes memory token) public virtual override view returns (bool allowed) {
+        address caller = _getAuthenticatedCaller(token);
+        require(hasRole(VIEWER_ROLE, caller), "Access denied");
         allowed = _isWhitelisted(account);
     }
 
     /// @inheritdoc IERC7943Fungible
     /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
-    function getFrozenTokens(address account) public virtual override view returns (uint256 amount) {
-        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+    function getFrozenTokens(address account, bytes memory token) public virtual override view returns (uint256 amount) {
+        address caller = _getAuthenticatedCaller(token);
+        require(hasRole(VIEWER_ROLE, caller), "Access denied");
         amount = _frozenTokens[account];
     }
 
     /// @notice Returns the balance of the account.
-    /// @dev Overrides ERC20 balanceOf to add access control. Requires VIEWER_ROLE.
+    /// @dev Requires VIEWER_ROLE and SIWE authentication via token parameter.
     /// @param account The address to query the balance of.
+    /// @param token SIWE session token for authenticated view calls.
     /// @return The balance of the account.
-    function balanceOf(address account) public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+    function balanceOf(address account, bytes memory token) public view virtual returns (uint256) {
+        address caller = _getAuthenticatedCaller(token);
+        require(hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.balanceOf(account);
     }
 
     /// @notice Returns the total supply of tokens.
-    /// @dev Overrides ERC20 totalSupply to add access control. Requires VIEWER_ROLE.
+    /// @dev Requires VIEWER_ROLE and SIWE authentication via token parameter.
+    /// @param token SIWE session token for authenticated view calls.
     /// @return The total supply of tokens.
-    function totalSupply() public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+    function totalSupply(bytes memory token) public view virtual returns (uint256) {
+        address caller = _getAuthenticatedCaller(token);
+        require(hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.totalSupply();
     }
 
     /// @notice Returns the amount of tokens that an owner allowed to a spender.
-    /// @dev Overrides ERC20 allowance to add access control. Requires VIEWER_ROLE.
+    /// @dev Requires VIEWER_ROLE and SIWE authentication via token parameter.
     /// @param owner The address which owns the funds.
     /// @param spender The address which will spend the funds.
+    /// @param token SIWE session token for authenticated view calls.
     /// @return The amount of tokens still available for the spender.
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+    function allowance(address owner, address spender, bytes memory token) public view virtual returns (uint256) {
+        address caller = _getAuthenticatedCaller(token);
+        require(hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.allowance(owner, spender);
     }
 
@@ -299,7 +326,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     function forcedTransfer(address from, address to, uint256 amount) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(from != address(0) && to != address(0), NotZeroAddress());
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        uint256 fromBalance = balanceOf(from);
+        uint256 fromBalance = super.balanceOf(from);
         require(fromBalance >= amount, InsufficientBalance());
         _excessFrozenUpdate(from, amount);
         
@@ -323,7 +350,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account);
-        uint256 accountBalance = balanceOf(account);
+        uint256 accountBalance = super.balanceOf(account);
         if(amount > unfrozenBalance && amount <= accountBalance) {
             _frozenTokens[account] -= amount - unfrozenBalance;
             
@@ -342,7 +369,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param account The address to calculate unfrozen balance for.
     /// @return unfrozenBalance The amount of tokens available for transfer.
     function _unfrozenBalance(address account) internal view returns(uint256 unfrozenBalance) {
-        uint256 accountBalance = balanceOf(account);
+        uint256 accountBalance = super.balanceOf(account);
         unfrozenBalance = accountBalance < _frozenTokens[account] ? 0 : accountBalance - _frozenTokens[account];
     }
 
@@ -351,7 +378,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param to The address receiving tokens.
     /// @param amount The amount being transferred.
     function _transfer(address from, address to, uint256 amount) internal virtual override {
-        uint256 fromBalance = balanceOf(from);
+        uint256 fromBalance = super.balanceOf(from);
         require(fromBalance >= amount, InsufficientBalance());
         uint256 unfrozenFromBalance = _unfrozenBalance(from);
         require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
@@ -377,8 +404,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         address from = _msgSender();
         require(_isWhitelisted(from), ERC7943CannotTransact(from));
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        
-        uint256 fromBalance = balanceOf(from);
+
+        uint256 fromBalance = super.balanceOf(from);
         require(fromBalance >= amount, InsufficientBalance());
         uint256 unfrozenFromBalance = _unfrozenBalance(from);
         require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
@@ -401,15 +428,15 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
         require(_isWhitelisted(from), ERC7943CannotTransact(from));
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        
-        uint256 fromBalance = balanceOf(from);
+
+        uint256 fromBalance = super.balanceOf(from);
         require(fromBalance >= amount, InsufficientBalance());
         uint256 unfrozenFromBalance = _unfrozenBalance(from);
         require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
-        
+
         // Check and update allowance
         address spender = _msgSender();
-        uint256 currentAllowance = allowance(from, spender);
+        uint256 currentAllowance = super.allowance(from, spender);
         if (currentAllowance != type(uint256).max) {
             require(currentAllowance >= amount, InsufficientAllowance());
             /// @solidity memory-safe-assembly
