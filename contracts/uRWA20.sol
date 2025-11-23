@@ -3,8 +3,7 @@ pragma solidity ^0.8.28;
 
 import {IERC7943Fungible} from "./interfaces/IERC7943.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "solady/src/tokens/ERC20.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
 import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
@@ -55,6 +54,11 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Error used when a zero address is provided where it is not allowed.
     error NotZeroAddress();
+
+    /// @dev Storage slot constants from Solady ERC20 (must match for compatibility)
+    uint256 private constant _TOTAL_SUPPLY_SLOT = 0x05345cdf77eb68f44c;
+    uint256 private constant _BALANCE_SLOT_SEED = 0x87a211a2;
+    uint256 private constant _ALLOWANCE_SLOT_SEED = 0x7f5e9f20;
 
     /// @notice Contract constructor.
     /// @dev Initializes the ERC-20 token with name and symbol, and grants all roles
@@ -136,6 +140,48 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     function allowance(address owner, address spender) public view virtual override returns (uint256) {
         require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.allowance(owner, spender);
+    }
+
+    /// @notice Internal helper to update balance without emitting Transfer event.
+    /// @dev Uses Solady's storage slot pattern to update balances directly.
+    /// @param from The address sending tokens (zero address for minting).
+    /// @param to The address receiving tokens (zero address for burning).
+    /// @param amount The amount being transferred.
+    function _updateBalanceWithoutEvent(address from, address to, uint256 amount) internal {
+        /// @solidity memory-safe-assembly
+        assembly {
+            if iszero(iszero(amount)) {
+                if iszero(iszero(from)) {
+                    // Compute the balance slot and load its value.
+                    mstore(0x0c, _BALANCE_SLOT_SEED)
+                    mstore(0x00, from)
+                    let fromBalanceSlot := keccak256(0x0c, 0x20)
+                    let fromBalance := sload(fromBalanceSlot)
+                    // Subtract and store the updated balance.
+                    sstore(fromBalanceSlot, sub(fromBalance, amount))
+                }
+                
+                if iszero(iszero(to)) {
+                    // Compute the balance slot of `to`.
+                    mstore(0x0c, _BALANCE_SLOT_SEED)
+                    mstore(0x00, to)
+                    let toBalanceSlot := keccak256(0x0c, 0x20)
+                    // Add and store the updated balance of `to`.
+                    sstore(toBalanceSlot, add(sload(toBalanceSlot), amount))
+                }
+                
+                // Update total supply
+                if iszero(from) {
+                    // Minting: increase total supply
+                    let totalSupplyBefore := sload(_TOTAL_SUPPLY_SLOT)
+                    let totalSupplyAfter := add(totalSupplyBefore, amount)
+                    sstore(_TOTAL_SUPPLY_SLOT, totalSupplyAfter)
+                } else if iszero(to) {
+                    // Burning: decrease total supply
+                    sstore(_TOTAL_SUPPLY_SLOT, sub(sload(_TOTAL_SUPPLY_SLOT), amount))
+                }
+            }
+        }
     }
 
     /// @notice Updates the whitelist status for a given account.
