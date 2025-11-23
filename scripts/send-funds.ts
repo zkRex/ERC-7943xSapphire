@@ -1,30 +1,58 @@
 import hre from "hardhat";
-import { createWalletClient, createPublicClient, http, parseEther, formatEther } from "viem";
+import { createWalletClient, createPublicClient, http, parseEther, formatEther, defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mnemonicToAccount } from "viem/accounts";
-import { sapphireLocalnetChain } from "../hardhat.config";
 import * as dotenv from "dotenv";
 import * as path from "path";
 
-// Load environment variables from scripts/.env
+// Load environment variables from root .env
+dotenv.config();
+// Also try to load from scripts/.env if it exists
 dotenv.config({ path: path.join(__dirname, ".env") });
 
 async function main() {
-  // Get private key from environment (from root .env)
+  // Get network from environment or default to sapphire-localnet
+  const networkName = process.env.NETWORK || "sapphire-localnet";
+  const network = hre.config.networks[networkName] as any;
+  
+  if (!network) {
+    throw new Error(`Network ${networkName} not found in hardhat.config.ts. Available networks: ${Object.keys(hre.config.networks).join(", ")}`);
+  }
+
+  const networkUrl = network.url as string;
+  const networkChainId = network.chainId as number;
+
+  // Create chain definition for viem
+  const chain = defineChain({
+    id: networkChainId,
+    name: networkName,
+    nativeCurrency: {
+      decimals: 18,
+      name: networkName.includes("testnet") || networkName.includes("localnet") ? "TEST" : "ROSE",
+      symbol: networkName.includes("testnet") || networkName.includes("localnet") ? "TEST" : "ROSE",
+    },
+    rpcUrls: {
+      default: {
+        http: [networkUrl],
+      },
+    },
+  });
+
+  // Get private key from environment
   const privateKey = process.env.PRIVATE_KEY;
   if (!privateKey) {
     throw new Error("PRIVATE_KEY environment variable is required");
   }
 
-  // Get values from scripts/.env
+  // Get values from environment
   const targetAddress = process.env.TARGET_ADDRESS as `0x${string}`;
   if (!targetAddress) {
-    throw new Error("TARGET_ADDRESS environment variable is required in scripts/.env");
+    throw new Error("TARGET_ADDRESS environment variable is required");
   }
 
   const tokenAddress = process.env.TOKEN_ADDRESS as `0x${string}`;
   if (!tokenAddress) {
-    throw new Error("TOKEN_ADDRESS environment variable is required in scripts/.env");
+    throw new Error("TOKEN_ADDRESS environment variable is required");
   }
 
   const ethAmountStr = process.env.ETH_AMOUNT || "10";
@@ -35,15 +63,19 @@ async function main() {
   // Create account from private key
   const account = privateKeyToAccount(privateKey as `0x${string}`);
 
+  console.log(`\nUsing network: ${networkName}`);
+  console.log(`Network URL: ${networkUrl}`);
+  console.log(`Chain ID: ${networkChainId}`);
+
   // Create clients
   const publicClient = createPublicClient({
-    chain: sapphireLocalnetChain,
+    chain,
     transport: http(),
   });
 
   const walletClient = createWalletClient({
     account,
-    chain: sapphireLocalnetChain,
+    chain,
     transport: http(),
   });
 
@@ -64,7 +96,7 @@ async function main() {
     
     const funderWalletClient = createWalletClient({
       account: funderAccount,
-      chain: sapphireLocalnetChain,
+      chain,
       transport: http(),
     });
 
@@ -105,7 +137,7 @@ async function main() {
   const adminAccount = mnemonicToAccount(adminMnemonic, { accountIndex: 0 });
   const adminWalletClient = createWalletClient({
     account: adminAccount,
-    chain: sapphireLocalnetChain,
+    chain,
     transport: http(),
   });
 

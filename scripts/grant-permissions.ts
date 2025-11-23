@@ -1,11 +1,12 @@
 import hre from "hardhat";
-import { createWalletClient, createPublicClient, http } from "viem";
+import { createWalletClient, createPublicClient, http, defineChain } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
-import { sapphireLocalnetChain } from "../hardhat.config";
 import * as dotenv from "dotenv";
 import * as path from "path";
 
-// Load environment variables from scripts/.env
+// Load environment variables from root .env
+dotenv.config();
+// Also try to load from scripts/.env if it exists
 dotenv.config({ path: path.join(__dirname, ".env") });
 
 // Role names - we'll read the actual hashes from the contract
@@ -21,39 +22,69 @@ const ROLE_NAMES = [
 ] as const;
 
 async function main() {
-  // Get values from scripts/.env
+  // Get network from environment or default to sapphire-localnet
+  const networkName = process.env.NETWORK || "sapphire-localnet";
+  const network = hre.config.networks[networkName] as any;
+  
+  if (!network) {
+    throw new Error(`Network ${networkName} not found in hardhat.config.ts. Available networks: ${Object.keys(hre.config.networks).join(", ")}`);
+  }
+
+  const networkUrl = network.url as string;
+  const networkChainId = network.chainId as number;
+
+  // Create chain definition for viem
+  const chain = defineChain({
+    id: networkChainId,
+    name: networkName,
+    nativeCurrency: {
+      decimals: 18,
+      name: networkName.includes("testnet") || networkName.includes("localnet") ? "TEST" : "ROSE",
+      symbol: networkName.includes("testnet") || networkName.includes("localnet") ? "TEST" : "ROSE",
+    },
+    rpcUrls: {
+      default: {
+        http: [networkUrl],
+      },
+    },
+  });
+
+  // Get values from environment
   const targetAddress = process.env.TARGET_ADDRESS as `0x${string}`;
   if (!targetAddress) {
-    throw new Error("TARGET_ADDRESS environment variable is required in scripts/.env");
+    throw new Error("TARGET_ADDRESS environment variable is required");
   }
 
   const tokenAddress = process.env.TOKEN_ADDRESS as `0x${string}`;
   if (!tokenAddress) {
-    throw new Error("TOKEN_ADDRESS environment variable is required in scripts/.env");
+    throw new Error("TOKEN_ADDRESS environment variable is required");
   }
 
   // Use account 0 (deployer/admin) which has DEFAULT_ADMIN_ROLE
   const adminMnemonic = process.env.ADMIN_MNEMONIC || "test test test test test test test test test test test junk";
   const adminAccount = mnemonicToAccount(adminMnemonic, { accountIndex: 0 });
 
+  console.log(`\nUsing network: ${networkName}`);
+  console.log(`Network URL: ${networkUrl}`);
+  console.log(`Chain ID: ${networkChainId}`);
+  console.log(`Admin address: ${adminAccount.address}`);
+  console.log(`Target address: ${targetAddress}`);
+  console.log(`Token contract: ${tokenAddress}\n`);
+
   // Create clients
   const publicClient = createPublicClient({
-    chain: sapphireLocalnetChain,
+    chain,
     transport: http(),
   });
 
   const adminWalletClient = createWalletClient({
     account: adminAccount,
-    chain: sapphireLocalnetChain,
+    chain,
     transport: http(),
   });
 
   // Get token ABI
   const tokenArtifact = await hre.artifacts.readArtifact("uRWA20");
-
-  console.log(`Admin address: ${adminAccount.address}`);
-  console.log(`Target address: ${targetAddress}`);
-  console.log(`Token contract: ${tokenAddress}\n`);
 
   // Read role hashes from contract
   console.log("Reading role hashes from contract...");
