@@ -209,10 +209,10 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
         // Reimplementing _safeTransferFrom to avoid the check on _update
         if (to == address(0)) {
-            revert ERC1155InvalidReceiver(address(0));
+            revert TransferToZeroAddress();
         }
         if (from == address(0)) {
-            revert ERC1155InvalidSender(address(0));
+            revert TransferToZeroAddress();
         }
 
         _excessFrozenUpdate(from, tokenId, amount);
@@ -329,7 +329,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @dev Overrides the ERC-1155 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
     /// Updates balances directly without emitting standard Transfer events (for privacy).
     /// Emits encrypted events using Sapphire precompiles for additional privacy.
-    /// Reverts with {ERC7943CannotTransact} | {ERC7943InsufficientUnfrozenBalance} | {ERC1155InsufficientBalance} 
+    /// Reverts with {ERC7943CannotTransact} | {ERC7943InsufficientUnfrozenBalance} | {InsufficientBalance} 
     /// if any `canTransfer`/`canTransact` or other check fails.
     /// @param from The address sending tokens (zero address for minting).
     /// @param to The address receiving tokens (zero address for burning).
@@ -337,7 +337,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param values The array of amounts being transferred.
     function _update(address from, address to, uint256[] memory ids, uint256[] memory values) internal virtual override {
         if (ids.length != values.length) {
-            revert ERC1155InvalidArrayLength(ids.length, values.length);
+            revert ArrayLengthsMismatch();
         }
 
         if (from != address(0) && to != address(0)) { // Transfer
@@ -346,7 +346,9 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
                 uint256 value = values[i];
                 uint256 fromBalance = balanceOf(from, id);
                 
-                require(value <= fromBalance, ERC1155InsufficientBalance(from, fromBalance, value, id));
+                if (value > fromBalance) {
+                    revert InsufficientBalance();
+                }
                 uint256 unfrozenBalance = _unfrozenBalance(from, id);
                 require(value <= unfrozenBalance, ERC7943InsufficientUnfrozenBalance(from, id, value, unfrozenBalance));
                 require(_isWhitelisted(from), ERC7943CannotTransact(from));
