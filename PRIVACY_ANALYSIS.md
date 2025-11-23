@@ -49,12 +49,58 @@ super._update(from, to, ids, values); // Emits TransferSingle/TransferBatch even
 - ❌ `from`, `to`, and `amount`/`tokenId` are exposed in plaintext logs
 - ✅ Custom encrypted events provide additional privacy, but don't replace the standard events
 
-**Recommendation**: 
-To fully fix this, you need to **suppress the standard Transfer events**. Options:
+**Root Cause: OpenZeppelin v5 Uses Private State Variables**
 
-1. **Fork OpenZeppelin contracts** - Create modified versions that don't emit Transfer events
-2. **Override without super._update()** - Manually update balances/ownership without calling parent
-3. **Accept the tradeoff** - Keep standard events for ERC compliance, but acknowledge privacy limitation
+The fundamental issue is that **OpenZeppelin v5 uses `private` visibility for internal state variables** (`_balances`, `_owners`, `_totalSupply`), which means:
+- ❌ Cannot access `_balances[account]` directly from child contracts
+- ❌ Cannot manually update balances without calling parent functions
+- ❌ Must call `super._update()` to update balances, which emits Transfer events
+- ❌ Cannot override `_mint`/`_burn` without emitting events because parent functions emit them
+
+**Solution: Use Solmate Instead of OpenZeppelin**
+
+**Solmate** (or its successor **Solady**) provides a better alternative for privacy-preserving contracts:
+
+**Advantages of Solmate:**
+- ✅ **Public state variables**: `balanceOf` and `totalSupply` are `public` mappings/variables
+- ✅ **Direct access**: Can read/write `balanceOf[account]` and `totalSupply` directly
+- ✅ **No forced events**: Can override `_mint`, `_burn`, `transfer`, `transferFrom` without calling parent
+- ✅ **Gas efficient**: More optimized than OpenZeppelin
+- ✅ **Simpler structure**: No hidden `private` state that blocks access
+
+**Implementation Options:**
+
+1. **Use Solmate as Library (Recommended)**
+   ```bash
+   npm install solmate
+   # or
+   npm install solady  # Solmate's successor, actively maintained
+   ```
+   
+   **Pros:**
+   - Easy to update if library receives fixes
+   - Standard dependency management
+   - Can use `import {ERC20} from "solmate/tokens/ERC20.sol";`
+   
+   **Cons:**
+   - Dependency on external package
+   - Need to ensure version compatibility
+
+2. **Copy Solmate Files Manually**
+   - Copy ERC20.sol, ERC721.sol, ERC1155.sol into your `contracts/lib/` directory
+   - Modify imports to use local copies
+   
+   **Pros:**
+   - Full control over the code
+   - No external dependencies
+   - Can make custom modifications if needed
+   
+   **Cons:**
+   - Manual updates if you want to pull in fixes
+   - More code to maintain
+
+**Recommendation**: 
+Use **Solady** (Solmate's successor) as a library dependency. It's actively maintained and provides the same benefits as Solmate. Then override `_mint`, `_burn`, `transfer`, and `transferFrom` to update balances directly without emitting Transfer events.
 
 **Reference**: 
 > "Unmodified contracts may leak state through logs. Base contracts like those provided by OpenZeppelin often emit logs containing private information. If you don't know they're doing that, you might undermine the confidentiality of your state."
