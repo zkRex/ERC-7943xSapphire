@@ -195,6 +195,23 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         amount = _frozenTokens[account];
     }
 
+    /// @notice Returns the balance of the account (standard ERC20 override).
+    /// @dev Overrides standard ERC20 balanceOf to protect privacy.
+    /// For transactions: requires VIEWER_ROLE via msg.sender.
+    /// For view calls: returns 0 to prevent information leakage (use balanceOf(address, bytes) with SIWE token instead).
+    /// @param account The address to query the balance of.
+    /// @return The balance of the account (0 for unauthenticated view calls).
+    function balanceOf(address account) public view virtual override returns (uint256) {
+        // For view calls (msg.sender == address(0)), return 0 to protect privacy
+        // Standard ERC20 functions cannot accept SIWE token parameter
+        if (msg.sender == address(0)) {
+            return 0;
+        }
+        // For transaction calls, require VIEWER_ROLE
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+        return super.balanceOf(account);
+    }
+
     /// @notice Returns the balance of the account.
     /// @dev Allows users to read their own balance, or requires VIEWER_ROLE for other accounts.
     /// SIWE authentication via token parameter is required for view calls.
@@ -208,6 +225,22 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         return super.balanceOf(account);
     }
 
+    /// @notice Returns the total supply of tokens (standard ERC20 override).
+    /// @dev Overrides standard ERC20 totalSupply to protect privacy.
+    /// For transactions: requires VIEWER_ROLE via msg.sender.
+    /// For view calls: returns 0 to prevent information leakage (use totalSupply(bytes) with SIWE token instead).
+    /// @return The total supply of tokens (0 for unauthenticated view calls).
+    function totalSupply() public view virtual override returns (uint256) {
+        // For view calls (msg.sender == address(0)), return 0 to protect privacy
+        // Standard ERC20 functions cannot accept SIWE token parameter
+        if (msg.sender == address(0)) {
+            return 0;
+        }
+        // For transaction calls, require VIEWER_ROLE
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+        return super.totalSupply();
+    }
+
     /// @notice Returns the total supply of tokens.
     /// @dev Requires VIEWER_ROLE and SIWE authentication via token parameter.
     /// @param token SIWE session token for authenticated view calls.
@@ -216,6 +249,24 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         address caller = _getAuthenticatedCaller(token);
         require(hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.totalSupply();
+    }
+
+    /// @notice Returns the amount of tokens that an owner allowed to a spender (standard ERC20 override).
+    /// @dev Overrides standard ERC20 allowance to protect privacy.
+    /// For transactions: requires VIEWER_ROLE via msg.sender.
+    /// For view calls: returns 0 to prevent information leakage (use allowance(address, address, bytes) with SIWE token instead).
+    /// @param owner The address which owns the funds.
+    /// @param spender The address which will spend the funds.
+    /// @return The amount of tokens still available for the spender (0 for unauthenticated view calls).
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+        // For view calls (msg.sender == address(0)), return 0 to protect privacy
+        // Standard ERC20 functions cannot accept SIWE token parameter
+        if (msg.sender == address(0)) {
+            return 0;
+        }
+        // For transaction calls, require VIEWER_ROLE
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+        return super.allowance(owner, spender);
     }
 
     /// @notice Returns the amount of tokens that an owner allowed to a spender.
@@ -230,6 +281,43 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         // Allow owners to read their own allowances, or require VIEWER_ROLE for others
         require(caller == owner || hasRole(VIEWER_ROLE, caller), "Access denied");
         return super.allowance(owner, spender);
+    }
+
+    /// @notice Sets `amount` as the allowance of `spender` over the caller's tokens (standard ERC20 override).
+    /// @dev Overrides standard ERC20 approve to enforce whitelist checks.
+    /// Requires both owner and spender to be whitelisted for RWA compliance.
+    /// @param spender The address that will be approved to spend tokens.
+    /// @param amount The amount of tokens to approve.
+    /// @return True if the operation succeeded.
+    function approve(address spender, uint256 amount) public virtual override returns (bool) {
+        address owner = _msgSender();
+        require(_isWhitelisted(owner), ERC7943CannotTransact(owner));
+        require(_isWhitelisted(spender), ERC7943CannotTransact(spender));
+        return super.approve(spender, amount);
+    }
+
+    /// @notice Sets `amount` as the allowance of `spender` over the `owner`'s tokens via signature (EIP-2612 permit override).
+    /// @dev Overrides standard ERC20 permit to enforce whitelist checks.
+    /// Requires both owner and spender to be whitelisted for RWA compliance.
+    /// @param owner The address that owns the tokens.
+    /// @param spender The address that will be approved to spend tokens.
+    /// @param value The amount of tokens to approve.
+    /// @param deadline The timestamp after which the permit is no longer valid.
+    /// @param v The recovery byte of the signature.
+    /// @param r Half of the ECDSA signature pair.
+    /// @param s Half of the ECDSA signature pair.
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual override {
+        require(_isWhitelisted(owner), ERC7943CannotTransact(owner));
+        require(_isWhitelisted(spender), ERC7943CannotTransact(spender));
+        super.permit(owner, spender, value, deadline, v, r, s);
     }
 
     /// @notice Internal helper to update balance without emitting Transfer event.
