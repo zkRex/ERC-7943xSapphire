@@ -1,10 +1,14 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther, keccak256, encodePacked, decodeEventLog, hexToSignature, Hex } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked, decodeEventLog, hexToSignature, Hex, createWalletClient, createPublicClient, http, defineChain } from "viem";
 import { readContract } from "viem/actions";
+import { privateKeyToAccount } from "viem/accounts";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx } from "./utils";
 import { SiweMessage } from "siwe";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 describe("uRWA20 Encryption & Auditing", function () {
     const isLocalNetwork = hre.network.name === "sapphire-localnet" || hre.network.name === "hardhat";
@@ -77,23 +81,91 @@ describe("uRWA20 Encryption & Auditing", function () {
 
     async function deployTokenFixture() {
         const useSapphireLocalnet = hre.network.name === "sapphire-localnet";
+        const isTestnet = hre.network.name === "sapphire-testnet";
         const chain = useSapphireLocalnet ? sapphireLocalnetChain : undefined;
 
-        const walletClients = useSapphireLocalnet
-            ? await hre.viem.getWalletClients({ chain })
-            : await hre.viem.getWalletClients();
+        // Define testnet chain if needed
+        const testnetChain = isTestnet ? defineChain({
+            id: 0x5aff,
+            name: "Sapphire Testnet",
+            nativeCurrency: {
+                decimals: 18,
+                name: "TEST",
+                symbol: "TEST",
+            },
+            rpcUrls: {
+                default: {
+                    http: ["https://testnet.sapphire.oasis.io"],
+                },
+            },
+        }) : undefined;
 
-        // We need at least 4 accounts: owner, user1, user2, auditor
-        const [ownerWallet, user1Wallet, user2Wallet, auditorWallet] = walletClients;
+        let ownerWallet: any;
+        let user1Wallet: any;
+        let user2Wallet: any;
+        let auditorWallet: any;
 
-        // Ensure accounts are distinct
-        expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(ownerWallet.account.address));
-        expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user1Wallet.account.address));
-        expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user2Wallet.account.address));
+        if (useSapphireLocalnet) {
+            // On localnet, use Hardhat's wallet clients (from mnemonic)
+            const walletClients = await hre.viem.getWalletClients({ chain });
+            [ownerWallet, user1Wallet, user2Wallet, auditorWallet] = walletClients;
 
-        const client = useSapphireLocalnet
-            ? await hre.viem.getPublicClient({ chain })
-            : await hre.viem.getPublicClient();
+            // Ensure accounts are distinct on localnet
+            expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(ownerWallet.account.address));
+            expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user1Wallet.account.address));
+            expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user2Wallet.account.address));
+        } else if (isTestnet) {
+            // On testnet, create wallet clients from PRIVATE_KEY
+            const privateKey = process.env.PRIVATE_KEY;
+            if (!privateKey) {
+                throw new Error("PRIVATE_KEY environment variable is required for sapphire-testnet");
+            }
+
+            // Create account from private key
+            const account = privateKeyToAccount(privateKey as `0x${string}`);
+
+            // Create wallet client
+            const walletClient = createWalletClient({
+                account,
+                chain: testnetChain,
+                transport: http(),
+            });
+
+            // For testnet, we'll use the same account for all roles
+            // In a real scenario, you'd want separate private keys for each role
+            ownerWallet = walletClient;
+            user1Wallet = walletClient;
+            user2Wallet = walletClient;
+            auditorWallet = walletClient;
+        } else {
+            // For other networks, use Hardhat's wallet clients
+            const walletClients = await hre.viem.getWalletClients();
+            [ownerWallet, user1Wallet, user2Wallet, auditorWallet] = walletClients;
+
+            // Ensure accounts are distinct if we have enough
+            if (auditorWallet && ownerWallet) {
+                expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(ownerWallet.account.address));
+            }
+            if (auditorWallet && user1Wallet) {
+                expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user1Wallet.account.address));
+            }
+            if (auditorWallet && user2Wallet) {
+                expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user2Wallet.account.address));
+            }
+        }
+
+        let client: any;
+        if (useSapphireLocalnet) {
+            client = await hre.viem.getPublicClient({ chain });
+        } else if (isTestnet) {
+            // Create public client for testnet
+            client = createPublicClient({
+                chain: testnetChain,
+                transport: http(),
+            });
+        } else {
+            client = await hre.viem.getPublicClient();
+        }
 
         const config = { client: { public: client, wallet: ownerWallet } };
 
