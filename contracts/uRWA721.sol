@@ -271,53 +271,54 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     }
 
     /// @notice Internal helper to update ownership and balances without emitting Transfer events.
-    /// @dev Uses Solady's internal functions to update state directly for privacy.
+    /// @dev Uses Solady's storage slot pattern to update state directly for privacy.
     /// @param from The address sending tokens (zero address for minting).
     /// @param to The address receiving tokens (zero address for burning).
     /// @param tokenId The ID of the token being transferred.
     function _updateOwnershipAndBalance(address from, address to, uint256 tokenId) internal {
-        // Update ownership using Solady's internal _setOwner function
-        // Solady ERC721 uses storage hitchhiking, so we can directly update ownership
-        if (from != address(0)) {
-            // Decrease balance of sender
-            uint256 fromBalance = balanceOf(from);
-            /// @solidity memory-safe-assembly
-            assembly {
-                // Use Solady's storage slot pattern for balance
-                mstore(0x0c, 0x7d8825530a5a2e7a00000000) // _ERC721_MASTER_SLOT_SEED_MASKED
-                mstore(0x00, from)
-                let balanceSlot := keccak256(0x0c, 0x20)
-                let balancePacked := sload(balanceSlot)
-                // Extract and decrement balance (stored in lower 32 bits)
-                let balance := and(balancePacked, 0xffffffff)
-                sstore(balanceSlot, sub(balancePacked, 1))
-            }
-        }
-        
-        if (to != address(0)) {
-            // Increase balance of receiver
-            /// @solidity memory-safe-assembly
-            assembly {
-                // Use Solady's storage slot pattern for balance
-                mstore(0x0c, 0x7d8825530a5a2e7a00000000) // _ERC721_MASTER_SLOT_SEED_MASKED
-                mstore(0x00, to)
-                let balanceSlot := keccak256(0x0c, 0x20)
-                let balancePacked := sload(balanceSlot)
-                // Extract and increment balance (stored in lower 32 bits)
-                let balance := and(balancePacked, 0xffffffff)
-                sstore(balanceSlot, add(balancePacked, 1))
-            }
-        }
-        
-        // Update ownership mapping (tokenId => owner)
         /// @solidity memory-safe-assembly
         assembly {
-            // Use Solady's storage slot pattern for ownership
-            mstore(0x0c, 0x7d8825530a5a2e7a00000000) // _ERC721_MASTER_SLOT_SEED_MASKED
+            // Clear the upper 96 bits of addresses
+            let bitmaskAddress := shr(96, not(0))
+            from := and(bitmaskAddress, from)
+            to := and(bitmaskAddress, to)
+            
+            // Compute ownership slot: add(id, add(id, keccak256(0x00, 0x20)))
+            // where id is stored at 0x00
             mstore(0x00, tokenId)
-            let ownerSlot := keccak256(0x0c, 0x20)
-            // Store owner in upper 160 bits, clear lower bits
-            sstore(ownerSlot, or(shl(96, to), and(sload(ownerSlot), not(shl(96, 0xffffffffffffffffffffffffffffffffffffffff)))))
+            let ownershipSlot := add(tokenId, add(tokenId, keccak256(0x00, 0x20)))
+            
+            if iszero(iszero(from)) {
+                // Token exists, load current ownership
+                let ownershipPacked := sload(ownershipSlot)
+                let owner := and(bitmaskAddress, ownershipPacked)
+                
+                // Update ownership: xor out old owner, xor in new owner
+                sstore(ownershipSlot, xor(ownershipPacked, xor(from, to)))
+                
+                // Decrement balance of `from`
+                mstore(0x0c, from)
+                let fromBalanceSlot := keccak256(0x0c, 0x1c)
+                sstore(fromBalanceSlot, sub(sload(fromBalanceSlot), 1))
+            } else {
+                // Minting: set ownership directly
+                sstore(ownershipSlot, shl(96, to))
+            }
+            
+            if iszero(iszero(to)) {
+                // Increment balance of `to`
+                mstore(0x0c, to)
+                let toBalanceSlot := keccak256(0x0c, 0x1c)
+                let toBalanceSlotPacked := add(sload(toBalanceSlot), 1)
+                // Check for overflow (balance stored in lower 32 bits)
+                let maxBalance := 0xffffffff
+                if iszero(and(toBalanceSlotPacked, maxBalance)) {
+                    // AccountBalanceOverflow
+                    mstore(0x00, 0xea553b34) // `AccountBalanceOverflow()`
+                    revert(0x1c, 0x04)
+                }
+                sstore(toBalanceSlot, toBalanceSlotPacked)
+            }
         }
     }
 
