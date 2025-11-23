@@ -17,6 +17,66 @@ All contracts are designed to work with Sapphire's privacy features, including e
 - Built with Hardhat and OpenZeppelin Contracts v5.4.0
 - Uses TypeScript for tests and deployment scripts
 
+## Encryption & Confidential Computing Features
+
+This implementation includes comprehensive encryption features leveraging Sapphire's confidential computing capabilities:
+
+### Encrypted Events
+
+All sensitive on-chain events are encrypted to protect transaction privacy:
+
+- **EncryptedTransfer**: Encrypted transfer events containing sender, receiver, amount, action type, timestamp, and nonce
+- **EncryptedWhitelisted**: Encrypted whitelist status changes
+- **EncryptedFrozen**: Encrypted token freezing/unfreezing events
+- **EncryptedForcedTransfer**: Encrypted forced transfer events
+- **EncryptedApproval**: Encrypted approval events (uRWA20 only)
+
+Standard Transfer events are eliminated to prevent information leakage. All sensitive data is encrypted using Sapphire's `encrypt()` function with contract-specific encryption keys.
+
+### Event Decryption Mechanism
+
+Authorized parties can decrypt events using the `processDecryption()` function:
+
+- **Authorization**: Decryption is restricted to:
+  - Transaction sender and receiver
+  - Accounts with `VIEWER_ROLE`
+  - Authorized auditors (see Auditor Permissions below)
+- **Data Storage**: Decrypted data is temporarily stored and can be retrieved via `viewLastDecryptedData()`
+- **Enhanced Format**: Encrypted events include:
+  - Action type ("transfer", "mint", "burn", "forcedTransfer")
+  - Block timestamp
+  - Unique nonce for replay attack prevention
+  - Contract address binding for additional security
+
+### Auditor Permission System (uRWA20)
+
+Comprehensive auditor permission system for compliance and regulatory requirements:
+
+- **Time-Limited Access**: Auditor permissions can be granted for durations from 1 hour to 30 days
+- **Full Access Mode**: Auditors can be granted full access to decrypt all transactions
+- **Address-Specific Access**: Auditors can be restricted to decrypt transactions involving specific addresses
+- **Main Auditor Role**: `MAIN_AUDITOR_ROLE` provides unrestricted audit access
+- **Revocable Permissions**: Permissions can be revoked at any time by the main auditor
+
+This enables compliance with regulatory audit requirements (SEC, FinCEN, etc.), controlled data disclosure for court orders, and temporary access for external auditors.
+
+### View Function Access Control
+
+All view functions that access private contract state require authorization:
+
+- **VIEWER_ROLE**: Required for viewing balances, frozen amounts, whitelist status, and other sensitive data
+- **Self-Read Permissions**: Users can read their own data without `VIEWER_ROLE`
+- **SIWE Authentication**: View functions support SIWE (Sign-In With Ethereum) authentication for secure access
+
+### Encryption Implementation Details
+
+- **Encryption Key**: Contract-specific encryption key generated during deployment
+- **Nonce Counter**: Incrementing nonce ensures uniqueness of encrypted events
+- **Contract Binding**: Additional data parameter binds encryption to contract address, preventing replay attacks
+- **Gas Padding**: Uses `Sapphire.padGas()` to prevent gas-based side-channel attacks
+
+For comprehensive analysis of encryption features, privacy considerations, and implementation details, see [`SAPPHIRE_ENCRYPTION.md`](./SAPPHIRE_ENCRYPTION.md).
+
 ## Testing
 
 Tests are run against a local Sapphire node (Hardhat network `sapphire-localnet`). The test suite validates:
@@ -27,6 +87,9 @@ Tests are run against a local Sapphire node (Hardhat network `sapphire-localnet`
 - Role-based access control
 - Interface support (`supportsInterface`)
 - Mint/burn operations
+- **Encryption and decryption** (encrypted events, sender/receiver decryption, unauthorized access prevention)
+- **Auditor permissions** (time-limited access, full access, address-specific access, permission revocation)
+- **View function access control** (VIEWER_ROLE requirements, self-read permissions)
 
 Run tests with:
 
@@ -39,10 +102,15 @@ For detailed test results and failure analysis, see [`TESTS.md`](./TESTS.md).
 
 ## Privacy Considerations
 
-On Sapphire:
-- **Events/logs are plaintext**: Avoid emitting sensitive data (KYC status, identities, exact freeze amounts) unless intentionally encrypted or redacted
-- **Calldata and state are encrypted**: However, access patterns and gas usage can still leak information
-- **Best practices**: Use constant-size storage layouts, predictable access patterns, and consider `Sapphire.padGas` for branches that depend on private data
+This implementation addresses privacy concerns through comprehensive encryption:
+
+- **Encrypted Events**: All sensitive events (transfers, whitelist changes, freezes, forced transfers) are encrypted using Sapphire's encryption functions. Standard Transfer events are eliminated to prevent information leakage.
+- **Encrypted Calldata and State**: Leverages Sapphire's built-in encryption for calldata and contract state
+- **Access Control**: View functions require `VIEWER_ROLE` or self-read permissions, preventing unauthorized access to private data
+- **Gas Padding**: Uses `Sapphire.padGas()` to prevent gas-based side-channel attacks
+- **Contract Binding**: Encryption includes contract address as additional data to prevent replay attacks
+
+**Note**: While events are encrypted, access patterns and gas usage can still leak information. Best practices include using constant-size storage layouts, predictable access patterns, and gas padding for branches that depend on private data.
 
 For comprehensive analysis of encryption features, privacy gaps, and implementation status, see [`SAPPHIRE_ENCRYPTION.md`](./SAPPHIRE_ENCRYPTION.md).
 
@@ -108,6 +176,16 @@ The project is configured for three networks:
 
 Network URLs and chain IDs are configured in `hardhat.config.ts`.
 
+### Deployments
+
+**Testnet Deployment:**
+
+The contracts are currently deployed on the Oasis Sapphire testnet:
+
+- **Contract Address**: [`0x5c5FC7995b0Ca3471dea4e5E1b8E1562f2adF4d3`](https://explorer.oasis.io/testnet/sapphire/address/0x5c5FC7995b0Ca3471dea4e5E1b8E1562f2adF4d3)
+
+View the deployment on the [Oasis Sapphire Testnet Explorer](https://explorer.oasis.io/testnet/sapphire/address/0x5c5FC7995b0Ca3471dea4e5E1b8E1562f2adF4d3).
+
 ### Contract Structure
 
 ```
@@ -125,7 +203,8 @@ All contracts use OpenZeppelin's `AccessControlEnumerable` for role-based access
 - `FREEZING_ROLE`: Can freeze/unfreeze tokens
 - `WHITELIST_ROLE`: Can manage whitelist
 - `FORCE_TRANSFER_ROLE`: Can perform forced transfers
-- `VIEWER_ROLE`: Can view private contract state (balances, frozen amounts, etc.)
+- `VIEWER_ROLE`: Can view private contract state (balances, frozen amounts, etc.) and decrypt events
+- `MAIN_AUDITOR_ROLE`: Can grant/revoke auditor permissions (uRWA20 only)
 
 ### Common Tasks
 
