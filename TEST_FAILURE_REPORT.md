@@ -3,9 +3,11 @@
 
 **Environment**: Sapphire Localnet
 **Test Suite**: test/uRWA20.ts
-**Test Results**: 18/19 passing (94.7%), 1 pending
+**Test Results**: 24/24 passing (100%), 0 pending
 
 ### Update Log
+- Unskipped and fixed mint access control test - Test was previously skipped using complex simulation logic. Updated to use `writeContractSync()` with `throwOnReceiptRevert: true` pattern. Test now passes.
+- Fixed FAILURES #6, #7, #8 (forcedTransfer tests) - Root cause identical to previous failures: incorrect test methodology. Tests were using `write.forcedTransfer()` instead of `writeContractSync()`. Changed both failing tests to use `writeContractSync` with `throwOnReceiptRevert: true`. All forcedTransfer tests now pass.
 - Fixed FAILURE #4 (transaction timeout) - Root cause identified as race condition in test infrastructure with parallel transaction waiting. Changed from `waitForTxs()` to sequential `waitForTx()` calls. Test now passes.
 - Fixed FAILURES #1, #2, #3, and #5 - Root cause identified as incorrect test methodology. Tests were using `write` (which only submits transactions) instead of `writeContractSync` (which submits and waits for confirmation). Changed all failing tests to use `writeContractSync` with `throwOnReceiptRevert: true`. All tests now pass.
 
@@ -16,9 +18,9 @@
 All test failures were caused by **incorrect test methodology**, not contract bugs. The contract implementation is correct and all security checks are functioning properly.
 
 ### Key Metrics
-- **Passing Tests**: 18/19 (94.7%)
+- **Passing Tests**: 24/24 (100%)
 - **Failing Tests**: 0
-- **Pending Tests**: 1 (5.3%)
+- **Pending Tests**: 0
 - **Contract Issues**: 0 (all failures were test infrastructure issues)
 
 ### Root Cause
@@ -30,37 +32,55 @@ The fix was to use `contract.writeContractSync()` with `throwOnReceiptRevert: tr
 
 ## Test Results Breakdown
 
-### Passing Tests (18)
+### Passing Tests (24)
 
 #### Deployment (3/3)
 - Should deploy successfully
-- Should have correct name and symbol (39ms)
-- Should grant all roles to initialAdmin (132ms)
+- Should have correct name and symbol (38ms)
+- Should grant all roles to initialAdmin (140ms)
 
 #### Interface Support (1/1)
 - Should support IERC7943Fungible interface
 
 #### canTransact Function (3/3)
-- Should return false for non-whitelisted account (110ms)
-- Should return true for whitelisted account (3143ms)
-- Should return false after removing from whitelist (6233ms)
+- Should return false for non-whitelisted account (104ms)
+- Should return true for whitelisted account (3161ms)
+- Should return false after removing from whitelist (6245ms)
 
 #### Whitelist Management (2/2)
-- Should allow WHITELIST_ROLE to change whitelist status (3171ms)
-- Should revert when called by non-whitelist role (1141ms)
+- Should allow WHITELIST_ROLE to change whitelist status (1557ms)
+- Should revert when called by non-whitelist role (1172ms)
 
-#### Mint Functionality (2/3)
-- Should allow MINTER_ROLE to mint tokens (4666ms)
-- Should revert when minting to non-whitelisted account (4235ms)
-- PENDING: Should revert when called by non-minter role
+#### Mint Functionality (3/3)
+- Should allow MINTER_ROLE to mint tokens (6296ms)
+- Should revert when minting to non-whitelisted account (4304ms)
+- Should revert when called by non-minter role (10299ms)
 
 #### Burn Functionality (2/2)
-- Should allow BURNER_ROLE to burn tokens (9266ms)
-- Should revert when called by non-burner role (10269ms)
+- Should allow BURNER_ROLE to burn tokens (9316ms)
+- Should revert when called by non-burner role (10193ms)
 
 #### Token Freezing (2/2)
-- Should allow FREEZING_ROLE to freeze tokens (7685ms)
-- Should revert when called by non-freezing role (4082ms)
+- Should allow FREEZING_ROLE to freeze tokens (9318ms)
+- Should revert when called by non-freezing role (4067ms)
+
+#### Transfer Restrictions (4/4)
+- Should allow transfer between whitelisted accounts (9137ms)
+- Should revert transfer from non-whitelisted account (13076ms)
+- Should revert transfer to non-whitelisted account (10201ms)
+- Should revert transfer when amount exceeds unfrozen balance (16582ms)
+
+#### Forced Transfer (3/3)
+- Should allow FORCE_TRANSFER_ROLE to force transfer tokens (15501ms)
+- Should revert when called by non-force-transfer role (4058ms)
+- Should revert when transferring to non-whitelisted account (8620ms)
+
+#### canTransfer Function (2/2)
+- Should return true for valid transfer (9343ms)
+- Should return false when amount exceeds unfrozen balance (9156ms)
+
+#### View Function Access Control (1/1)
+- Should allow VIEWER_ROLE to call canTransfer (6983ms)
 
 ---
 
@@ -234,6 +254,91 @@ This timeout was caused by the same race condition with parallel transaction sub
 The fix for FAILURE #4 (changing from parallel `waitForTxs()` to sequential `waitForTx()` calls) also resolves this issue since all 7 instances across the test file were updated.
 
 **Status**: ✅ LIKELY RESOLVED (cascading fix from FAILURE #4)
+
+---
+
+### FAILURE #6: Forced Transfer Access Control Bypass - RESOLVED
+**Test**: `forcedTransfer` → `Should revert when called by non-force-transfer role`
+
+```
+AssertionError: expected promise to be rejected but it was fulfilled with '0x18831fe05cca55803f4477667453e69a058…'
+```
+
+**Expected Behavior**:
+- Non-FORCE_TRANSFER_ROLE accounts attempt to force transfer tokens
+- Transaction should revert with access control error
+- Tokens should remain intact
+
+**Actual Behavior**:
+- Transaction succeeds and returns a valid hash: `0x18831fe...`
+- Forced transfer is executed by unauthorized account
+- No access control validation occurred
+
+**Impact**: CRITICAL
+- Any account can force transfer tokens, bypassing frozen token restrictions
+- Token ownership can be arbitrarily transferred by attackers
+- ERC-7943 compliance violation
+- Economic security breach for regulated RWA use case
+
+**Root Cause**: Test was using `tokenAsOther.write.forcedTransfer()` which returns a transaction hash immediately without waiting for the transaction to be mined. The contract access control is working correctly.
+
+**Resolution**: Changed test to use `writeContractSync()` with `throwOnReceiptRevert: true` (test/uRWA20.ts:633-649). Test now correctly rejects when non-force-transfer-role attempts to force transfer tokens.
+
+---
+
+### FAILURE #7: Forced Transfer Whitelist Bypass - RESOLVED
+**Test**: `forcedTransfer` → `Should revert when transferring to non-whitelisted account`
+
+```
+AssertionError: expected promise to be rejected but it was fulfilled with '0x69dad39a0fda36fa3003874435f12cdd2d8…'
+```
+
+**Expected Behavior**:
+- FORCE_TRANSFER_ROLE attempts to force transfer to non-whitelisted account
+- Transaction should revert with whitelist error
+- Tokens should not be transferred to non-whitelisted account
+
+**Actual Behavior**:
+- Transaction succeeds and returns a valid hash: `0x69dad39...`
+- Tokens are transferred to non-whitelisted account
+- No whitelist validation occurred
+
+**Impact**: CRITICAL
+- Forced transfers can bypass whitelist requirements
+- Tokens can be transferred to unauthorized/non-compliant accounts
+- ERC-7943 compliance violation
+- Regulatory requirement not enforced
+
+**Root Cause**: Test was using `token.write.forcedTransfer()` which returns a transaction hash immediately without waiting for the transaction to be mined. The contract whitelist enforcement is working correctly.
+
+**Resolution**: Changed test to use `writeContractSync()` with `throwOnReceiptRevert: true` (test/uRWA20.ts:651-679). Test now correctly rejects when force transferring to non-whitelisted account.
+
+---
+
+### FAILURE #8: canTransfer beforeEach Hook Timeout - RESOLVED
+**Test**: `canTransfer` → `"before each" hook for "Should return true for valid transfer"`
+
+```
+Error: Timeout of 30000ms exceeded. For async tests and hooks, ensure "done()\" is called; if returning a Promise, ensure it resolves.
+```
+
+**Expected Behavior**:
+- beforeEach hook sets up test state
+- Hook completes within 30 seconds
+- Test suite progresses to canTransfer tests
+
+**Actual Behavior**:
+- beforeEach hook hangs and never completes
+- Test suite cannot proceed
+- canTransfer tests cannot run
+
+**Root Cause**: ✅ CASCADING FROM FAILURES #6 AND #7
+This timeout was caused by the forcedTransfer tests (FAILURES #6 and #7) not properly waiting for transaction completion. When tests use `.write.` methods, transactions may remain pending, causing subsequent test setup to timeout.
+
+**Solution Applied**: ✅
+The fix for FAILURES #6 and #7 (changing from `write.forcedTransfer()` to `writeContractSync()`) also resolves this issue. Once the forcedTransfer tests properly wait for transactions to complete, the canTransfer tests can proceed without timeouts.
+
+**Status**: ✅ RESOLVED (cascading fix from FAILURES #6 and #7)
 
 ---
 
@@ -466,12 +571,16 @@ All test failures have been resolved. The failures were caused by incorrect test
 4. **Transfer to non-whitelisted account test** - Fixed by using `writeContractSync()` with `throwOnReceiptRevert: true`
 5. **Unfrozen balance transfer test** - Fixed by using `writeContractSync()` with `throwOnReceiptRevert: true`
 6. **Transaction timeout on whitelisted transfers** - Fixed by changing from parallel to sequential transaction waiting
-7. **beforeEach hook timeout** - Resolved as cascade from fixing other test issues
+7. **beforeEach hook timeout (transfer restrictions)** - Resolved as cascade from fixing other test issues
+8. **Forced transfer access control test** - Fixed by using `writeContractSync()` with `throwOnReceiptRevert: true`
+9. **Forced transfer whitelist enforcement test** - Fixed by using `writeContractSync()` with `throwOnReceiptRevert: true`
+10. **beforeEach hook timeout (canTransfer)** - Resolved as cascade from fixing forcedTransfer tests
+11. **Mint access control test** - Unskipped and fixed by replacing simulation logic with `writeContractSync()` pattern
 
 ### Contract Status
-- **18/19 tests passing** (94.7%)
+- **24/24 tests passing** (100%)
 - **0 tests failing**
-- **1 test pending** (intentionally skipped)
+- **0 tests pending**
 - **No contract security issues found**
 
-The contract implementation is correct. All access control checks are functioning properly. All whitelist enforcement is working as expected. ERC-7943 compliance requirements are met.
+The contract implementation is correct. All access control checks are functioning properly. All whitelist enforcement is working as expected. All forced transfer restrictions are properly enforced. All minting access controls are verified. ERC-7943 compliance requirements are met.
