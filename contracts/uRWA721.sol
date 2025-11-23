@@ -213,7 +213,15 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
         require(_ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, _ownerOf(tokenId)));
         _excessFrozenUpdate(from , tokenId);
-        super._update(to, tokenId, address(0)); // Skip _update override
+        
+        // Update ownership directly without calling super._update() to avoid emitting Transfer events
+        // This preserves privacy by only emitting encrypted events
+        unchecked {
+            _balances[from] -= 1;
+            _balances[to] += 1;
+        }
+        _ownerOf[tokenId] = to;
+        
         ERC721Utils.checkOnERC721Received(_msgSender(), from, to, tokenId, "");
         
         // Encrypt sensitive event data
