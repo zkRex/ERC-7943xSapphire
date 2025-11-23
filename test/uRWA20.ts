@@ -192,7 +192,7 @@ describe("uRWA20", function () {
       
       // Note: This is a simplified check. In practice, we'd calculate the proper interface ID.
       // For now, we'll test the known interfaces
-      expect(await readToken("supportsInterface", ["0x01ffc9a7"])).to.be.true; // IERC165
+      expect(await token.read.supportsInterface(["0x01ffc9a7"])).to.be.true; // IERC165
     });
   });
 
