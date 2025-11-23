@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {IERC7943MultiToken} from "./interfaces/IERC7943.sol";
 import {ERC1155} from "solady/src/tokens/ERC1155.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
 import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
@@ -126,7 +127,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param accounts The addresses to query balances for.
     /// @param ids The token IDs to query.
     /// @return The balances of the accounts for the token IDs.
-    function balanceOfBatch(address[] memory accounts, uint256[] memory ids) public view virtual override returns (uint256[] memory) {
+    function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids) public view virtual override returns (uint256[] memory) {
         require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.balanceOfBatch(accounts, ids);
     }
@@ -202,6 +203,46 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         result = true;
     }
 
+    /// @notice Checks if an address has code (i.e., is a contract).
+    /// @param account The address to check.
+    /// @return True if the address has code, false otherwise.
+    function _hasContractCode(address account) internal view returns (bool) {
+        return account.code.length > 0;
+    }
+
+    /// @notice Checks if the recipient contract implements IERC1155Receiver and calls onERC1155Received.
+    /// @param operator The address which initiated the transfer.
+    /// @param from The address which previously owned the token.
+    /// @param to The address which will receive the token.
+    /// @param id The ID of the token being transferred.
+    /// @param amount The amount of tokens being transferred.
+    /// @param data Additional data with no specified format.
+    function _checkOnERC1155Received(
+        address operator,
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) internal {
+        if (to.code.length > 0) {
+            try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 retval) {
+                if (retval != IERC1155Receiver.onERC1155Received.selector) {
+                    revert("ERC1155: transfer to non-ERC1155Receiver implementer");
+                }
+            } catch (bytes memory reason) {
+                if (reason.length == 0) {
+                    revert("ERC1155: transfer to non-ERC1155Receiver implementer");
+                } else {
+                    /// @solidity memory-safe-assembly
+                    assembly {
+                        revert(add(32, reason), mload(reason))
+                    }
+                }
+            }
+        }
+    }
+
     /// @inheritdoc IERC7943MultiToken
     /// @dev Can only be called by accounts holding the `FORCE_TRANSFER_ROLE`.
     function forcedTransfer(address from, address to, uint256 tokenId, uint256 amount) public onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
@@ -226,7 +267,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         
         if (to != address(0)) {
             address operator = _msgSender();
-            if (_hasCode(to)) {
+            if (_hasContractCode(to)) {
                 _checkOnERC1155Received(operator, from, to, tokenId, amount, "");
             }
         } 
@@ -291,7 +332,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             mstore(0x20, masterSlotSeed)
             
             // Loop through all ids and values
-            for { let i := 0 } lt(i, ids.length) { i := add(i, 1) } {
+            let idsLength := mload(ids)
+            for { let i := 0 } lt(i, idsLength) { i := add(i, 1) } {
                 let id := mload(add(ids, add(0x20, mul(i, 0x20))))
                 let amount := mload(add(values, add(0x20, mul(i, 0x20))))
                 
@@ -335,7 +377,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param to The address receiving tokens (zero address for burning).
     /// @param ids The array of ids.
     /// @param values The array of amounts being transferred.
-    function _update(address from, address to, uint256[] memory ids, uint256[] memory values) internal virtual override {
+    function _update(address from, address to, uint256[] memory ids, uint256[] memory values) internal virtual {
         if (ids.length != values.length) {
             revert ArrayLengthsMismatch();
         }
