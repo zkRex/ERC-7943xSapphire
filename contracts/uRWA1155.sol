@@ -283,6 +283,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
     /// @notice Hook that is called before any token transfer, including minting and burning.
     /// @dev Overrides the ERC-1155 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
+    /// Emits encrypted events in addition to the standard Transfer events to protect privacy.
+    /// Note: The standard Transfer events are still emitted by super._update() for compatibility.
     /// Reverts with {ERC7943CannotTransact} | {ERC7943InsufficientUnfrozenBalance} | {ERC1155InsufficientBalance} 
     /// if any `canTransfer`/`canTransact` or other check fails.
     /// @param from The address sending tokens (zero address for minting).
@@ -313,7 +315,18 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             }
         }
 
+        // Call parent to update balances (this will emit Transfer events)
         super._update(from, to, ids, values);
+        
+        // Emit encrypted transfer event for privacy
+        bytes memory plaintext = abi.encode(from, to, ids, values, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedTransfer(encrypted);
+        
+        // Pad gas to prevent side-channel leakage from conditional branches
+        // Estimate worst-case gas: ~200k for batch transfer with all checks and encryption
+        Sapphire.padGas(250000);
     }
 
     /// @notice See {IERC165-supportsInterface}.
