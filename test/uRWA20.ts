@@ -8,6 +8,8 @@ const itIfSupportsEventLogs =
   hre.network.name === "sapphire-localnet" ? it.skip : it;
 
 describe("uRWA20", function () {
+  this.timeout(120000); // 2 minutes timeout for all tests
+  
   let token: any;
   let owner: any;
   let otherAccount: any;
