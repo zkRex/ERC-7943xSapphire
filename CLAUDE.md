@@ -8,10 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Compile contracts
 pnpm compile
 
-# Run all tests
-pnpm test
-
-# Run single test file
+# Run uRWA20 test file
 hardhat test test/uRWA20.ts --network sapphire-localnet
 
 # Deploy
