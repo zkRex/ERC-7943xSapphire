@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther, keccak256, encodePacked } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked, readContract } from "viem";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
 
@@ -16,15 +16,28 @@ describe("uRWA20", function () {
   let thirdAccount: any;
   let publicClient: any;
   
-  // Helper to get a wallet-backed contract instance for view calls on Sapphire
-  // On Sapphire, view calls must be signed to have a non-zero msg.sender
-  async function getTokenForReads(walletClient: any) {
+  // Helper to read from contract with signed queries on Sapphire
+  // On Sapphire, view calls must be signed to have a non-zero msg.sender.
+  // Viem's contract.read.* uses the public client, so we use readContract with wallet client.
+  async function readToken<T extends readonly unknown[]>(
+    functionName: string,
+    args: T,
+    walletClient: any = owner
+  ): Promise<any> {
     if (hre.network.name === "sapphire-localnet") {
-      return await hre.viem.getContractAt("uRWA20", token.address, {
-        client: { public: publicClient, wallet: walletClient }
+      // On Sapphire, use readContract with wallet client to sign the query
+      const abi = await hre.artifacts.readArtifact("uRWA20");
+      return readContract(walletClient, {
+        address: token.address,
+        abi: abi.abi,
+        functionName,
+        args,
+        account: walletClient.account,
       });
+    } else {
+      // For non-Sapphire networks, use regular contract.read
+      return (token.read as any)[functionName](args);
     }
-    return token;
   }
 
   async function deployTokenFixture() {
@@ -89,18 +102,24 @@ describe("uRWA20", function () {
     });
 
     it("Should have correct name and symbol", async function () {
-      expect(await token.read.name()).to.equal("Test Token");
-      expect(await token.read.symbol()).to.equal("TEST");
+      expect(await readToken("name", [])).to.equal("Test Token");
+      expect(await readToken("symbol", [])).to.equal("TEST");
     });
 
     it("Should grant all roles to initialAdmin", async function () {
       const ownerAddress = getAddress(owner.account.address);
-      expect(await token.read.hasRole([await token.read.DEFAULT_ADMIN_ROLE(), ownerAddress])).to.be.true;
-      expect(await token.read.hasRole([await token.read.MINTER_ROLE(), ownerAddress])).to.be.true;
-      expect(await token.read.hasRole([await token.read.BURNER_ROLE(), ownerAddress])).to.be.true;
-      expect(await token.read.hasRole([await token.read.FREEZING_ROLE(), ownerAddress])).to.be.true;
-      expect(await token.read.hasRole([await token.read.WHITELIST_ROLE(), ownerAddress])).to.be.true;
-      expect(await token.read.hasRole([await token.read.FORCE_TRANSFER_ROLE(), ownerAddress])).to.be.true;
+      const defaultAdminRole = await readToken("DEFAULT_ADMIN_ROLE", []);
+      const minterRole = await readToken("MINTER_ROLE", []);
+      const burnerRole = await readToken("BURNER_ROLE", []);
+      const freezingRole = await readToken("FREEZING_ROLE", []);
+      const whitelistRole = await readToken("WHITELIST_ROLE", []);
+      const forceTransferRole = await readToken("FORCE_TRANSFER_ROLE", []);
+      expect(await readToken("hasRole", [defaultAdminRole, ownerAddress])).to.be.true;
+      expect(await readToken("hasRole", [minterRole, ownerAddress])).to.be.true;
+      expect(await readToken("hasRole", [burnerRole, ownerAddress])).to.be.true;
+      expect(await readToken("hasRole", [freezingRole, ownerAddress])).to.be.true;
+      expect(await readToken("hasRole", [whitelistRole, ownerAddress])).to.be.true;
+      expect(await readToken("hasRole", [forceTransferRole, ownerAddress])).to.be.true;
     });
   });
 
