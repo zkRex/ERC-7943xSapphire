@@ -44,6 +44,7 @@
     "viem": "^2.39.3"
   },
   "dependencies": {
+    "siwe": "^3.0.0",
     "solady": "^0.1.26"
   }
 }
