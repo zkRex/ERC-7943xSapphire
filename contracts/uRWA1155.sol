@@ -241,7 +241,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 tokenId, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account, tokenId);
-        uint256 accountBalance = balanceOf(account, tokenId);
+        uint256 accountBalance = super.balanceOf(account, tokenId);
         if(amount > unfrozenBalance && amount <= accountBalance) { 
             _frozenTokens[account][tokenId] -= amount - unfrozenBalance;
             
@@ -261,7 +261,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param tokenId The ID of the token to check
     /// @return unfrozenBalance The amount of tokens available for transfer.
     function _unfrozenBalance(address account, uint256 tokenId) internal view returns(uint256 unfrozenBalance) {
-        uint256 accountBalance = balanceOf(account, tokenId);
+        uint256 accountBalance = super.balanceOf(account, tokenId);
         unfrozenBalance = accountBalance < _frozenTokens[account][tokenId] ? 0 : accountBalance - _frozenTokens[account][tokenId];
     }
 
