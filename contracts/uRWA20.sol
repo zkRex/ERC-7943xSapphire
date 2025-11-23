@@ -36,6 +36,12 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @notice Nonce counter for event encryption to ensure uniqueness.
     uint256 internal _eventNonce;
 
+    /// @notice Token name.
+    string private _name;
+
+    /// @notice Token symbol.
+    string private _symbol;
+
     /// @notice Emitted when an account's whitelist status is changed (encrypted).
     /// @param encryptedData Encrypted data containing account and status.
     event EncryptedWhitelisted(bytes encryptedData);
@@ -64,10 +70,12 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @dev Initializes the ERC-20 token with name and symbol, and grants all roles
     /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
     /// Generates an encryption key for encrypting sensitive events.
-    /// @param name The name of the token.
-    /// @param symbol The symbol of the token.
+    /// @param name_ The name of the token.
+    /// @param symbol_ The symbol of the token.
     /// @param initialAdmin The address to receive initial administrative and operational roles.
-    constructor(string memory name, string memory symbol, address initialAdmin) ERC20(name, symbol) {
+    constructor(string memory name_, string memory symbol_, address initialAdmin) {
+        _name = name_;
+        _symbol = symbol_;
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
         _grantRole(MINTER_ROLE, initialAdmin);
         _grantRole(BURNER_ROLE, initialAdmin);
@@ -77,9 +85,19 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         _grantRole(VIEWER_ROLE, initialAdmin);
         
         // Generate encryption key for event encryption
-        bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA20", name, symbol));
+        bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA20", name_, symbol_));
         _encryptionKey = bytes32(randomBytes);
         _eventNonce = 0;
+    }
+
+    /// @dev Returns the name of the token.
+    function name() public view virtual override returns (string memory) {
+        return _name;
+    }
+
+    /// @dev Returns the symbol of the token.
+    function symbol() public view virtual override returns (string memory) {
+        return _symbol;
     }
 
     /// @inheritdoc IERC7943Fungible
@@ -171,12 +189,15 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
                 }
                 
                 // Update total supply
-                if iszero(from) {
+                let isMint := iszero(from)
+                let isBurn := iszero(to)
+                if isMint {
                     // Minting: increase total supply
                     let totalSupplyBefore := sload(_TOTAL_SUPPLY_SLOT)
                     let totalSupplyAfter := add(totalSupplyBefore, amount)
                     sstore(_TOTAL_SUPPLY_SLOT, totalSupplyAfter)
-                } else if iszero(to) {
+                }
+                if isBurn {
                     // Burning: decrease total supply
                     sstore(_TOTAL_SUPPLY_SLOT, sub(sload(_TOTAL_SUPPLY_SLOT), amount))
                 }
@@ -234,6 +255,12 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         
         Sapphire.padGas(200000);
     }
+
+    /// @dev Hook called before token transfer (Solady pattern).
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {}
+
+    /// @dev Hook called after token transfer (Solady pattern).
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {}
 
     /// @dev Overrides Solady's _burn to update balances without emitting Transfer events.
     /// @param from The address from which tokens are burned.
@@ -319,30 +346,17 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         unfrozenBalance = accountBalance < _frozenTokens[account] ? 0 : accountBalance - _frozenTokens[account];
     }
 
-    /// @notice Hook that is called during any token transfer, including minting and burning.
-    /// @dev Overrides the ERC-20 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
-    /// Updates balances directly without emitting standard Transfer events (only encrypted events for privacy).
-    /// Reverts with {ERC7943InsufficientUnfrozenBalance} | {ERC7943CannotTransact} if any `canTransfer` check fails.
-    /// @param from The address sending tokens (zero address for minting).
-    /// @param to The address receiving tokens (zero address for burning).
+    /// @dev Internal transfer function that enforces transfer restrictions.
+    /// @param from The address sending tokens.
+    /// @param to The address receiving tokens.
     /// @param amount The amount being transferred.
-    function _update(address from, address to, uint256 amount) internal virtual override {
-        bool isTransfer = (from != address(0) && to != address(0));
-        bool isMint = (from == address(0));
-        bool isBurn = (to == address(0));
-        
-        if (isTransfer) { // Transfer
-            uint256 fromBalance = balanceOf(from);
-            require(fromBalance >= amount, InsufficientBalance());
-            uint256 unfrozenFromBalance = _unfrozenBalance(from);
-            require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
-            require(_isWhitelisted(from), ERC7943CannotTransact(from));
-            require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        } else if (isMint) { // Mint
-            require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        } else if (isBurn) { // Burn
-            _excessFrozenUpdate(from, amount);
-        }
+    function _transfer(address from, address to, uint256 amount) internal virtual override {
+        uint256 fromBalance = balanceOf(from);
+        require(fromBalance >= amount, InsufficientBalance());
+        uint256 unfrozenFromBalance = _unfrozenBalance(from);
+        require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
+        require(_isWhitelisted(from), ERC7943CannotTransact(from));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
 
         // Update balances directly without emitting standard Transfer events
         _updateBalanceWithoutEvent(from, to, amount);
@@ -354,7 +368,6 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         emit EncryptedTransfer(encrypted);
         
         // Pad gas to prevent side-channel leakage from conditional branches
-        // Estimate worst-case gas: ~150k for transfer with all checks and encryption
         Sapphire.padGas(200000);
     }
 
