@@ -217,13 +217,12 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
         _excessFrozenUpdate(from, tokenId, amount);
 
-        // Use super._update() to update balances (will emit Transfer events, but balances must be updated)
-        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
+        // Update balances directly without emitting standard Transfer events
         uint256[] memory ids = new uint256[](1);
         uint256[] memory values = new uint256[](1);
         ids[0] = tokenId;
         values[0] = amount;
-        super._update(from, to, ids, values);
+        _updateBalancesWithoutEvent(from, to, ids, values);
         
         if (to != address(0)) {
             address operator = _msgSender();
@@ -249,7 +248,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 tokenId, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account, tokenId);
-        uint256 accountBalance = super.balanceOf(account, tokenId);
+        uint256 accountBalance = balanceOf(account, tokenId);
         if(amount > unfrozenBalance && amount <= accountBalance) { 
             _frozenTokens[account][tokenId] -= amount - unfrozenBalance;
             
@@ -328,8 +327,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
     /// @notice Hook that is called before any token transfer, including minting and burning.
     /// @dev Overrides the ERC-1155 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
-    /// Calls super._update() to handle balance updates (will emit standard Transfer events).
-    /// Also emits encrypted events using Sapphire precompiles for additional privacy.
+    /// Updates balances directly without emitting standard Transfer events (for privacy).
+    /// Emits encrypted events using Sapphire precompiles for additional privacy.
     /// Reverts with {ERC7943CannotTransact} | {ERC7943InsufficientUnfrozenBalance} | {ERC1155InsufficientBalance} 
     /// if any `canTransfer`/`canTransact` or other check fails.
     /// @param from The address sending tokens (zero address for minting).
@@ -345,7 +344,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             for (uint256 i = 0; i < ids.length; ++i) {
                 uint256 id = ids[i];
                 uint256 value = values[i];
-                uint256 fromBalance = super.balanceOf(from, id);
+                uint256 fromBalance = balanceOf(from, id);
                 
                 require(value <= fromBalance, ERC1155InsufficientBalance(from, fromBalance, value, id));
                 uint256 unfrozenBalance = _unfrozenBalance(from, id);
@@ -361,9 +360,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             }
         }
 
-        // Call super._update() to handle balance updates (will emit standard Transfer events)
-        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
-        super._update(from, to, ids, values);
+        // Update balances directly without emitting standard Transfer events
+        _updateBalancesWithoutEvent(from, to, ids, values);
         
         // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, ids, values, _eventNonce++);
