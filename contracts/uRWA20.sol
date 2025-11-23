@@ -89,11 +89,19 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         allowed = true;
     }
 
+    /// @notice Internal helper to check whitelist status without access control.
+    /// @dev Used internally by _update to check whitelist during transfers.
+    /// @param account The address to check.
+    /// @return allowed True if the account is whitelisted, false otherwise.
+    function _isWhitelisted(address account) internal view returns (bool allowed) {
+        allowed = _whitelist[account];
+    }
+
     /// @inheritdoc IERC7943Fungible
     /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public virtual override view returns (bool allowed) {
         require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
-        allowed = _whitelist[account] ? true : false;
+        allowed = _isWhitelisted(account);
     }
 
     /// @inheritdoc IERC7943Fungible
@@ -181,7 +189,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @dev Can only be called by accounts holding the `FORCE_TRANSFER_ROLE`.
     function forcedTransfer(address from, address to, uint256 amount) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(from != address(0) && to != address(0), NotZeroAddress());
-        require(canTransact(to), ERC7943CannotTransact(to));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
         _excessFrozenUpdate(from, amount);
         super._update(from, to, amount); // Directly update balances, bypassing overridden _update
         
@@ -240,10 +248,10 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
             uint256 fromBalance = balanceOf(from);
             require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
             require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
-            require(canTransact(from), ERC7943CannotTransact(from));
-            require(canTransact(to), ERC7943CannotTransact(to));
+            require(_isWhitelisted(from), ERC7943CannotTransact(from));
+            require(_isWhitelisted(to), ERC7943CannotTransact(to));
         } else if (isMint) { // Mint
-            require(canTransact(to), ERC7943CannotTransact(to));
+            require(_isWhitelisted(to), ERC7943CannotTransact(to));
         } else if (isBurn) { // Burn
             _excessFrozenUpdate(from, amount);
         }
