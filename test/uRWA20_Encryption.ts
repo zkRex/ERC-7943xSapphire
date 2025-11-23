@@ -116,7 +116,8 @@ describe("uRWA20 Encryption & Auditing", function () {
             const encryptedData = (decodedLog.args as any).encryptedData;
 
             // User1 (sender) should be able to decrypt
-            await tokenAsUser1.write.processDecryption([encryptedData]);
+            const decryptHash = await tokenAsUser1.write.processDecryption([encryptedData]);
+            await waitForTx(decryptHash, publicClient);
 
             // Check decrypted data
             const data = await tokenAsUser1.read.viewLastDecryptedData();
@@ -152,7 +153,8 @@ describe("uRWA20 Encryption & Auditing", function () {
             const config2 = { client: { public: publicClient, wallet: user2 } };
             const tokenAsUser2 = await hre.viem.getContractAt("uRWA20", token.address, config2);
 
-            await tokenAsUser2.write.processDecryption([encryptedData]);
+            const decryptHash = await tokenAsUser2.write.processDecryption([encryptedData]);
+            await waitForTx(decryptHash, publicClient);
 
             const data = await tokenAsUser2.read.viewLastDecryptedData();
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address));
@@ -230,7 +232,8 @@ describe("uRWA20 Encryption & Auditing", function () {
             const configAuditor = { client: { public: publicClient, wallet: auditor } };
             const tokenAsAuditor = await hre.viem.getContractAt("uRWA20", token.address, configAuditor);
 
-            await tokenAsAuditor.write.processDecryption([encryptedData]);
+            const decryptHash = await tokenAsAuditor.write.processDecryption([encryptedData]);
+            await waitForTx(decryptHash, publicClient);
 
             const data = await tokenAsAuditor.read.viewLastDecryptedData();
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address));
@@ -271,7 +274,8 @@ describe("uRWA20 Encryption & Auditing", function () {
             const configAuditor = { client: { public: publicClient, wallet: auditor } };
             const tokenAsAuditor = await hre.viem.getContractAt("uRWA20", token.address, configAuditor);
 
-            await tokenAsAuditor.write.processDecryption([encryptedData]);
+            const decryptHash = await tokenAsAuditor.write.processDecryption([encryptedData]);
+            await waitForTx(decryptHash, publicClient);
 
             const data = await tokenAsAuditor.read.viewLastDecryptedData();
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address));
@@ -318,7 +322,13 @@ describe("uRWA20 Encryption & Auditing", function () {
             const tokenAsAuditor = await hre.viem.getContractAt("uRWA20", token.address, configAuditor);
 
             await expect(
-                tokenAsAuditor.write.processDecryption([encryptedData])
+                auditor.writeContractSync({
+                    address: token.address,
+                    abi: abi.abi,
+                    functionName: 'processDecryption',
+                    args: [encryptedData],
+                    throwOnReceiptRevert: true
+                })
             ).to.be.rejected;
         });
     });
