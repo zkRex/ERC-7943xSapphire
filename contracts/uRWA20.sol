@@ -296,7 +296,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account);
-        uint256 accountBalance = super.balanceOf(account);
+        uint256 accountBalance = balanceOf(account);
         if(amount > unfrozenBalance && amount <= accountBalance) {
             _frozenTokens[account] -= amount - unfrozenBalance;
             
@@ -321,8 +321,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-20 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logic.
-    /// Calls super._update() to handle balance updates (will emit standard Transfer events).
-    /// Also emits encrypted events using Sapphire precompiles for additional privacy.
+    /// Updates balances directly without emitting standard Transfer events (only encrypted events for privacy).
     /// Reverts with {ERC7943InsufficientUnfrozenBalance} | {ERC7943CannotTransact} if any `canTransfer` check fails.
     /// @param from The address sending tokens (zero address for minting).
     /// @param to The address receiving tokens (zero address for burning).
@@ -333,8 +332,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bool isBurn = (to == address(0));
         
         if (isTransfer) { // Transfer
-            uint256 fromBalance = super.balanceOf(from);
-            require(fromBalance >= amount, ERC20InsufficientBalance(from, fromBalance, amount));
+            uint256 fromBalance = balanceOf(from);
+            require(fromBalance >= amount, ERC20.InsufficientBalance());
             uint256 unfrozenFromBalance = _unfrozenBalance(from);
             require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
             require(_isWhitelisted(from), ERC7943CannotTransact(from));
@@ -345,9 +344,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
             _excessFrozenUpdate(from, amount);
         }
 
-        // Call super._update() to handle balance and totalSupply updates (will emit standard Transfer events)
-        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
-        super._update(from, to, amount);
+        // Update balances directly without emitting standard Transfer events
+        _updateBalanceWithoutEvent(from, to, amount);
         
         // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
@@ -360,13 +358,75 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         Sapphire.padGas(200000);
     }
 
+    /// @dev Overrides Solady's transfer to enforce whitelist and frozen token checks.
+    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
+    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+        address from = _msgSender();
+        require(_isWhitelisted(from), ERC7943CannotTransact(from));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+        
+        uint256 fromBalance = balanceOf(from);
+        require(fromBalance >= amount, ERC20.InsufficientBalance());
+        uint256 unfrozenFromBalance = _unfrozenBalance(from);
+        require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
+        
+        // Update balances directly without emitting Transfer event
+        _updateBalanceWithoutEvent(from, to, amount);
+        
+        // Emit only encrypted event
+        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedTransfer(encrypted);
+        
+        Sapphire.padGas(200000);
+        return true;
+    }
+
+    /// @dev Overrides Solady's transferFrom to enforce whitelist and frozen token checks.
+    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
+        require(_isWhitelisted(from), ERC7943CannotTransact(from));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+        
+        uint256 fromBalance = balanceOf(from);
+        require(fromBalance >= amount, ERC20.InsufficientBalance());
+        uint256 unfrozenFromBalance = _unfrozenBalance(from);
+        require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
+        
+        // Check and update allowance
+        address spender = _msgSender();
+        uint256 currentAllowance = allowance(from, spender);
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= amount, ERC20.InsufficientAllowance());
+            /// @solidity memory-safe-assembly
+            assembly {
+                mstore(0x20, spender)
+                mstore(0x0c, or(shl(96, from), _ALLOWANCE_SLOT_SEED))
+                let allowanceSlot := keccak256(0x0c, 0x34)
+                sstore(allowanceSlot, sub(sload(allowanceSlot), amount))
+            }
+        }
+        
+        // Update balances directly without emitting Transfer event
+        _updateBalanceWithoutEvent(from, to, amount);
+        
+        // Emit only encrypted event
+        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedTransfer(encrypted);
+        
+        Sapphire.padGas(200000);
+        return true;
+    }
+
     /// @notice See {IERC165-supportsInterface}.
     /// @dev Indicates support for the {IERC7943Fungible} interface in addition to inherited interfaces.
     /// @param interfaceId The interface identifier, as specified in ERC-165.
     /// @return True if the contract implements `interfaceId`, false otherwise.
     function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControlEnumerable, IERC165) returns (bool) {
         return interfaceId == type(IERC7943Fungible).interfaceId ||
-            interfaceId == type(IERC20).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
