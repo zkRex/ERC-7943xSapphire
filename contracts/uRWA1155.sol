@@ -284,7 +284,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             for (uint256 i = 0; i < ids.length; ++i) {
                 uint256 id = ids[i];
                 uint256 value = values[i];
-                uint256 fromBalance = balanceOf(from, id);
+                uint256 fromBalance = super.balanceOf(from, id);
                 
                 require(value <= fromBalance, ERC1155InsufficientBalance(from, fromBalance, value, id));
                 uint256 unfrozenBalance = _unfrozenBalance(from, id);
