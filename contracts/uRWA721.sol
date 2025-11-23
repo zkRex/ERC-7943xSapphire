@@ -170,9 +170,6 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedWhitelisted(encrypted);
-        
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit Whitelisted(account, status);
     }
 
     /// @notice Safely creates a new token with `tokenId` and assigns it to `to`.
@@ -207,9 +204,6 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedFrozen(encrypted);
         
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit Frozen(account, tokenId, frozenStatus);
-        
         result = true;
     }
 
@@ -228,9 +222,6 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedForcedTransfer(encrypted);
-        
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit ForcedTransfer(from, to, tokenId);
         
         result = true;
     }
@@ -251,9 +242,6 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
             bytes32 nonce = bytes32(_eventNonce);
             bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
             emit EncryptedFrozen(encrypted);
-            
-            // Also emit unencrypted for backward compatibility (can be removed in production)
-            emit Frozen(from, tokenId, false);
         }
     }
 
