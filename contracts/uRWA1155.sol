@@ -53,12 +53,6 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param encryptedData Encrypted data containing from, to, tokenId, and amount.
     event EncryptedForcedTransfer(bytes encryptedData);
 
-    /// @notice Emitted when an account's whitelist status is changed.
-    /// @param account The address whose status was changed.
-    /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
-    /// @dev Deprecated: Use EncryptedWhitelisted instead. Kept for backward compatibility.
-    event Whitelisted(address indexed account, bool status);
-
     /// @notice Contract constructor.
     /// @dev Initializes the ERC-1155 token with a URI and grants all roles
     /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
@@ -81,10 +75,9 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     }
 
     /// @inheritdoc IERC7943MultiToken
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransfer(address from, address to, uint256 tokenId, uint256 amount) public view virtual override returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         uint256 fromBalance = balanceOf(from, tokenId);
         if (fromBalance < _frozenTokens[from][tokenId]) return allowed;
         if (amount > fromBalance - _frozenTokens[from][tokenId]) return allowed;
@@ -101,20 +94,19 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     }
 
     /// @inheritdoc IERC7943MultiToken
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function getFrozenTokens(address account, uint256 tokenId) external view returns (uint256 amount) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         amount = _frozenTokens[account][tokenId];
     }
 
     /// @notice Returns the balance of `account` for token `id`.
-    /// @dev Overrides ERC1155 balanceOf to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC1155 balanceOf to add access control. Requires VIEWER_ROLE.
     /// @param account The address to query the balance of.
     /// @param id The token ID to query.
     /// @return The balance of the account for the token ID.
     function balanceOf(address account, uint256 id) public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.balanceOf(account, id);
     }
 
@@ -160,9 +152,6 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedWhitelisted(encrypted);
-        
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit Whitelisted(account, status);
     }
 
     /// @notice Safely creates `amount` new tokens of `id` and assigns them to `to`.
@@ -196,9 +185,6 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedFrozen(encrypted);
-        
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit Frozen(account, tokenId, amount);
         
         result = true;
     }
@@ -242,9 +228,6 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedForcedTransfer(encrypted);
         
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit ForcedTransfer(from, to, tokenId, amount);
-        
         result = true;
     }
 
@@ -264,9 +247,6 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             bytes32 nonce = bytes32(_eventNonce);
             bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
             emit EncryptedFrozen(encrypted);
-            
-            // Also emit unencrypted for backward compatibility (can be removed in production)
-            emit Frozen(account, tokenId, _frozenTokens[account][tokenId]);
         }
     }
 
