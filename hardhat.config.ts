@@ -12,7 +12,8 @@ const accounts = process.env.PRIVATE_KEY
   ? [
       process.env.PRIVATE_KEY,
       process.env.PRIVATE_KEY_2,
-      process.env.PRIVATE_KEY_3
+      process.env.PRIVATE_KEY_3,
+      process.env.PRIVATE_KEY_4
     ].filter(Boolean) as string[]
   : [];
 
@@ -48,6 +49,7 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 1,
       },
+      viaIR: true, // Enable IR-based code generation for better optimization
     },
   },
   etherscan: {

@@ -16,13 +16,13 @@ import {CalldataEncryption} from "./CalldataEncryption.sol";
 /// controlled minting/burning, asset forced transfers, and freezing. Managed via AccessControl.
 contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, SiweAuth {
     /// @notice Role identifiers.
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+    // bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    // bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant FREEZING_ROLE = keccak256("FREEZING_ROLE");
     bytes32 public constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
     bytes32 public constant FORCE_TRANSFER_ROLE = keccak256("FORCE_TRANSFER_ROLE");
     bytes32 public constant VIEWER_ROLE = keccak256("VIEWER_ROLE");
-    bytes32 public constant MAIN_AUDITOR_ROLE = keccak256("MAIN_AUDITOR_ROLE");
+    // bytes32 public constant MAIN_AUDITOR_ROLE = keccak256("MAIN_AUDITOR_ROLE");
 
     /// @notice Mapping storing the whitelist status for each account address.
     /// @dev True indicates the account is whitelisted and allowed to interact, false otherwise.
@@ -55,18 +55,18 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @dev Data is temporarily stored after successful decryption for retrieval.
     mapping(address => DecryptedTransferData) private _lastDecryptedData;
 
-    /// @notice Struct for auditor permissions.
-    /// @dev Manages time-limited and scope-limited audit access.
-    struct AuditorPermission {
-        uint256 expiryTime;
-        bool hasFullAccess;
-        bool isActive;
-        mapping(address => bool) authorizedAddresses;
-    }
+    // /// @notice Struct for auditor permissions.
+    // /// @dev Manages time-limited and scope-limited audit access.
+    // struct AuditorPermission {
+    //     uint256 expiryTime;
+    //     bool hasFullAccess;
+    //     bool isActive;
+    //     mapping(address => bool) authorizedAddresses;
+    // }
 
-    /// @notice Mapping storing auditor permissions.
-    /// @dev Main auditor has unrestricted access without needing this mapping.
-    mapping(address => AuditorPermission) public auditorPermissions;
+    // /// @notice Mapping storing auditor permissions.
+    // /// @dev Main auditor has unrestricted access without needing this mapping.
+    // mapping(address => AuditorPermission) public auditorPermissions;
 
     /// @notice Token name.
     string private _name;
@@ -119,13 +119,13 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         _name = name_;
         _symbol = symbol_;
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
-        _grantRole(MINTER_ROLE, initialAdmin);
-        _grantRole(BURNER_ROLE, initialAdmin);
+        // _grantRole(MINTER_ROLE, initialAdmin);
+        // _grantRole(BURNER_ROLE, initialAdmin);
         _grantRole(FREEZING_ROLE, initialAdmin);
         _grantRole(WHITELIST_ROLE, initialAdmin);
         _grantRole(FORCE_TRANSFER_ROLE, initialAdmin);
         _grantRole(VIEWER_ROLE, initialAdmin);
-        _grantRole(MAIN_AUDITOR_ROLE, initialAdmin);
+        // _grantRole(MAIN_AUDITOR_ROLE, initialAdmin);
 
         // Generate encryption key for event encryption
         bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA20", name_, symbol_));
@@ -460,13 +460,13 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
             uint256 nonce
         ) = abi.decode(decryptedData, (address, address, uint256, string, uint256, uint256));
 
-        // Authorization check: caller must be sender, receiver, have VIEWER_ROLE, or have auditor permission
+        // Authorization check: caller must be sender, receiver, or have VIEWER_ROLE
         bool isAuthorized =
             msg.sender == from ||
             msg.sender == to ||
-            hasRole(VIEWER_ROLE, msg.sender) ||
-            checkAuditorPermission(msg.sender, from) ||
-            checkAuditorPermission(msg.sender, to);
+            hasRole(VIEWER_ROLE, msg.sender);
+            // || checkAuditorPermission(msg.sender, from) ||
+            // checkAuditorPermission(msg.sender, to);
 
         require(isAuthorized, "Not authorized to decrypt");
 
@@ -506,67 +506,67 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         delete _lastDecryptedData[msg.sender];
     }
 
-    /// @notice Grants auditor permission with time and scope limits.
-    /// @dev Can only be called by MAIN_AUDITOR_ROLE. Enables controlled audit access.
-    /// @param auditor The address to grant auditor permissions to.
-    /// @param duration The duration in seconds for which the permission is valid (max 30 days).
-    /// @param fullAccess True for full access, false for address-specific access.
-    /// @param authorizedAddresses Array of addresses the auditor can audit (ignored if fullAccess is true).
-    function grantAuditorPermission(
-        address auditor,
-        uint256 duration,
-        bool fullAccess,
-        address[] calldata authorizedAddresses
-    ) external onlyRole(MAIN_AUDITOR_ROLE) {
-        require(auditor != address(0), "Invalid auditor address");
-        require(duration > 0 && duration <= 30 days, "Invalid duration");
+    // /// @notice Grants auditor permission with time and scope limits.
+    // /// @dev Can only be called by MAIN_AUDITOR_ROLE. Enables controlled audit access.
+    // /// @param auditor The address to grant auditor permissions to.
+    // /// @param duration The duration in seconds for which the permission is valid (max 30 days).
+    // /// @param fullAccess True for full access, false for address-specific access.
+    // /// @param authorizedAddresses Array of addresses the auditor can audit (ignored if fullAccess is true).
+    // function grantAuditorPermission(
+    //     address auditor,
+    //     uint256 duration,
+    //     bool fullAccess,
+    //     address[] calldata authorizedAddresses
+    // ) external onlyRole(MAIN_AUDITOR_ROLE) {
+    //     require(auditor != address(0), "Invalid auditor address");
+    //     require(duration > 0 && duration <= 30 days, "Invalid duration");
 
-        AuditorPermission storage perm = auditorPermissions[auditor];
-        perm.expiryTime = block.timestamp + duration;
-        perm.hasFullAccess = fullAccess;
-        perm.isActive = true;
+    //     AuditorPermission storage perm = auditorPermissions[auditor];
+    //     perm.expiryTime = block.timestamp + duration;
+    //     perm.hasFullAccess = fullAccess;
+    //     perm.isActive = true;
 
-        if (!fullAccess) {
-            for (uint i = 0; i < authorizedAddresses.length; i++) {
-                perm.authorizedAddresses[authorizedAddresses[i]] = true;
-            }
-        }
-    }
+    //     if (!fullAccess) {
+    //         for (uint i = 0; i < authorizedAddresses.length; i++) {
+    //             perm.authorizedAddresses[authorizedAddresses[i]] = true;
+    //         }
+    //     }
+    // }
 
-    /// @notice Revokes auditor permission.
-    /// @dev Can only be called by MAIN_AUDITOR_ROLE.
-    /// @param auditor The address whose auditor permissions to revoke.
-    function revokeAuditorPermission(address auditor) external onlyRole(MAIN_AUDITOR_ROLE) {
-        auditorPermissions[auditor].isActive = false;
-    }
+    // /// @notice Revokes auditor permission.
+    // /// @dev Can only be called by MAIN_AUDITOR_ROLE.
+    // /// @param auditor The address whose auditor permissions to revoke.
+    // function revokeAuditorPermission(address auditor) external onlyRole(MAIN_AUDITOR_ROLE) {
+    //     auditorPermissions[auditor].isActive = false;
+    // }
 
-    /// @notice Checks if an auditor has permission to access data for a specific address.
-    /// @dev Main auditor always has access. Other auditors checked based on permission settings.
-    /// @param auditor The auditor address to check.
-    /// @param targetAddress The address being audited.
-    /// @return hasPermission True if the auditor has permission, false otherwise.
-    function checkAuditorPermission(address auditor, address targetAddress)
-        public view returns (bool hasPermission) {
-        // Main auditor always has full access
-        if (hasRole(MAIN_AUDITOR_ROLE, auditor)) {
-            return true;
-        }
+    // /// @notice Checks if an auditor has permission to access data for a specific address.
+    // /// @dev Main auditor always has access. Other auditors checked based on permission settings.
+    // /// @param auditor The auditor address to check.
+    // /// @param targetAddress The address being audited.
+    // /// @return hasPermission True if the auditor has permission, false otherwise.
+    // function checkAuditorPermission(address auditor, address targetAddress)
+    //     public view returns (bool hasPermission) {
+    //     // Main auditor always has full access
+    //     if (hasRole(MAIN_AUDITOR_ROLE, auditor)) {
+    //         return true;
+    //     }
 
-        AuditorPermission storage perm = auditorPermissions[auditor];
+    //     AuditorPermission storage perm = auditorPermissions[auditor];
 
-        // Check if permission is active and not expired
-        if (!perm.isActive || block.timestamp > perm.expiryTime) {
-            return false;
-        }
+    //     // Check if permission is active and not expired
+    //     if (!perm.isActive || block.timestamp > perm.expiryTime) {
+    //         return false;
+    //     }
 
-        // Full access auditors can access all addresses
-        if (perm.hasFullAccess) {
-            return true;
-        }
+    //     // Full access auditors can access all addresses
+    //     if (perm.hasFullAccess) {
+    //         return true;
+    //     }
 
-        // Otherwise, check if this specific address is authorized
-        return perm.authorizedAddresses[targetAddress];
-    }
+    //     // Otherwise, check if this specific address is authorized
+    //     return perm.authorizedAddresses[targetAddress];
+    // }
 
     /// @notice Updates the whitelist status for a given account.
     /// @dev Can only be called by accounts holding the `WHITELIST_ROLE`.
@@ -589,53 +589,53 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         emit EncryptedWhitelisted(encrypted);
     }
 
-    /// @notice Creates `amount` new tokens and assigns them to `to`.
-    /// @dev Can only be called by accounts holding the `MINTER_ROLE`.
-    /// Requires `to` to be allowed according to {canTransact}.
-    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
-    /// @param to The address that will receive the minted tokens.
-    /// @param amount The amount of tokens to mint.
-    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
-        _mint(to, amount);
-    }
+    // /// @notice Creates `amount` new tokens and assigns them to `to`.
+    // /// @dev Can only be called by accounts holding the `MINTER_ROLE`.
+    // /// Requires `to` to be allowed according to {canTransact}.
+    // /// Does NOT emit standard Transfer events (only encrypted events for privacy).
+    // /// @param to The address that will receive the minted tokens.
+    // /// @param amount The amount of tokens to mint.
+    // function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
+    //     _mint(to, amount);
+    // }
 
-    /// @notice Destroys `amount` tokens from the caller's account.
-    /// @dev Can only be called by accounts holding the `BURNER_ROLE`.
-    /// Does NOT emit standard Transfer events (only encrypted events for privacy).
-    /// @param amount The amount of tokens to burn.
-    function burn(uint256 amount) external onlyRole(BURNER_ROLE) {
-        _burn(_msgSender(), amount);
-    }
+    // /// @notice Destroys `amount` tokens from the caller's account.
+    // /// @dev Can only be called by accounts holding the `BURNER_ROLE`.
+    // /// Does NOT emit standard Transfer events (only encrypted events for privacy).
+    // /// @param amount The amount of tokens to burn.
+    // function burn(uint256 amount) external onlyRole(BURNER_ROLE) {
+    //     _burn(_msgSender(), amount);
+    // }
 
-    /// @dev Overrides Solady's _mint to update balances without emitting Transfer events.
-    /// @param to The address that will receive the minted tokens.
-    /// @param amount The amount of tokens to mint.
-    function _mint(address to, uint256 amount) internal virtual override {
-        require(_isWhitelisted(to), ERC7943CannotTransact(to));
+    // /// @dev Overrides Solady's _mint to update balances without emitting Transfer events.
+    // /// @param to The address that will receive the minted tokens.
+    // /// @param amount The amount of tokens to mint.
+    // function _mint(address to, uint256 amount) internal virtual override {
+    //     require(_isWhitelisted(to), ERC7943CannotTransact(to));
 
-        // Update balances directly without emitting Transfer event
-        _updateBalanceWithoutEvent(address(0), to, amount);
+    //     // Update balances directly without emitting Transfer event
+    //     _updateBalanceWithoutEvent(address(0), to, amount);
 
-        // Emit only encrypted event with action, timestamp, and nonce
-        bytes memory plaintext = abi.encode(
-            address(0),
-            to,
-            amount,
-            "mint",
-            block.timestamp,
-            _eventNonce
-        );
-        bytes32 nonce = bytes32(_eventNonce++);
-        bytes memory encrypted = Sapphire.encrypt(
-            _encryptionKey,
-            nonce,
-            plaintext,
-            abi.encode(address(this)) // Bind to contract address
-        );
-        emit EncryptedTransfer(encrypted);
+    //     // Emit only encrypted event with action, timestamp, and nonce
+    //     bytes memory plaintext = abi.encode(
+    //         address(0),
+    //         to,
+    //         amount,
+    //         "mint",
+    //         block.timestamp,
+    //         _eventNonce
+    //     );
+    //     bytes32 nonce = bytes32(_eventNonce++);
+    //     bytes memory encrypted = Sapphire.encrypt(
+    //         _encryptionKey,
+    //         nonce,
+    //         plaintext,
+    //         abi.encode(address(this)) // Bind to contract address
+    //     );
+    //     emit EncryptedTransfer(encrypted);
 
-        Sapphire.padGas(200000);
-    }
+    //     Sapphire.padGas(200000);
+    // }
 
     /// @dev Hook called before token transfer (Solady pattern).
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {}
@@ -643,35 +643,35 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @dev Hook called after token transfer (Solady pattern).
     function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {}
 
-    /// @dev Overrides Solady's _burn to update balances without emitting Transfer events.
-    /// @param from The address from which tokens are burned.
-    /// @param amount The amount of tokens to burn.
-    function _burn(address from, uint256 amount) internal virtual override {
-        _excessFrozenUpdate(from, amount);
+    // /// @dev Overrides Solady's _burn to update balances without emitting Transfer events.
+    // /// @param from The address from which tokens are burned.
+    // /// @param amount The amount of tokens to burn.
+    // function _burn(address from, uint256 amount) internal virtual override {
+    //     _excessFrozenUpdate(from, amount);
 
-        // Update balances directly without emitting Transfer event
-        _updateBalanceWithoutEvent(from, address(0), amount);
+    //     // Update balances directly without emitting Transfer event
+    //     _updateBalanceWithoutEvent(from, address(0), amount);
 
-        // Emit only encrypted event with action, timestamp, and nonce
-        bytes memory plaintext = abi.encode(
-            from,
-            address(0),
-            amount,
-            "burn",
-            block.timestamp,
-            _eventNonce
-        );
-        bytes32 nonce = bytes32(_eventNonce++);
-        bytes memory encrypted = Sapphire.encrypt(
-            _encryptionKey,
-            nonce,
-            plaintext,
-            abi.encode(address(this)) // Bind to contract address
-        );
-        emit EncryptedTransfer(encrypted);
+    //     // Emit only encrypted event with action, timestamp, and nonce
+    //     bytes memory plaintext = abi.encode(
+    //         from,
+    //         address(0),
+    //         amount,
+    //         "burn",
+    //         block.timestamp,
+    //         _eventNonce
+    //     );
+    //     bytes32 nonce = bytes32(_eventNonce++);
+    //     bytes memory encrypted = Sapphire.encrypt(
+    //         _encryptionKey,
+    //         nonce,
+    //         plaintext,
+    //         abi.encode(address(this)) // Bind to contract address
+    //     );
+    //     emit EncryptedTransfer(encrypted);
 
-        Sapphire.padGas(200000);
-    }
+    //     Sapphire.padGas(200000);
+    // }
 
     /// @inheritdoc IERC7943Fungible
     /// @dev Can only be called by accounts holding the `FREEZING_ROLE`
@@ -920,12 +920,12 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         } else if (selector == this.approve.selector) {
             (address spender, uint256 amount) = abi.decode(params, (address, uint256));
             _executeApprove(_msgSender(), spender, amount);
-        } else if (selector == this.mint.selector) {
-            (address to, uint256 amount) = abi.decode(params, (address, uint256));
-            _executeMint(to, amount);
-        } else if (selector == this.burn.selector) {
-            (uint256 amount) = abi.decode(params, (uint256));
-            _executeBurn(_msgSender(), amount);
+        // } else if (selector == this.mint.selector) {
+        //     (address to, uint256 amount) = abi.decode(params, (address, uint256));
+        //     _executeMint(to, amount);
+        // } else if (selector == this.burn.selector) {
+        //     (uint256 amount) = abi.decode(params, (uint256));
+        //     _executeBurn(_msgSender(), amount);
         } else if (selector == this.changeWhitelist.selector) {
             (address account, bool status) = abi.decode(params, (address, bool));
             _executeChangeWhitelist(account, status);
@@ -1148,17 +1148,17 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         emit EncryptedApproval(encrypted);
     }
 
-    /// @notice Internal function to execute mint with encrypted calldata.
-    function _executeMint(address to, uint256 amount) internal {
-        require(hasRole(MINTER_ROLE, _msgSender()), "AccessControl: account missing role");
-        _mint(to, amount);
-    }
+    // /// @notice Internal function to execute mint with encrypted calldata.
+    // function _executeMint(address to, uint256 amount) internal {
+    //     require(hasRole(MINTER_ROLE, _msgSender()), "AccessControl: account missing role");
+    //     _mint(to, amount);
+    // }
 
-    /// @notice Internal function to execute burn with encrypted calldata.
-    function _executeBurn(address from, uint256 amount) internal {
-        require(hasRole(BURNER_ROLE, _msgSender()), "AccessControl: account missing role");
-        _burn(from, amount);
-    }
+    // /// @notice Internal function to execute burn with encrypted calldata.
+    // function _executeBurn(address from, uint256 amount) internal {
+    //     require(hasRole(BURNER_ROLE, _msgSender()), "AccessControl: account missing role");
+    //     _burn(from, amount);
+    // }
 
     /// @notice Internal function to execute changeWhitelist with encrypted calldata.
     function _executeChangeWhitelist(address account, bool status) internal {

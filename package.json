@@ -23,7 +23,8 @@
     "send-to-address:testnet": "ts-node scripts/send-to-address.ts",
     "create-key-and-fund:testnet": "ts-node scripts/create-key-and-fund.ts",
     "demo": "hardhat run demo/demo.ts --network sapphire-testnet",
-    "demo:localnet": "ts-node demo/demo-localnet.ts"
+    "demo:localnet": "ts-node demo/demo-localnet.ts",
+    "check-size": "ts-node scripts/check-contract-size.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.3",
