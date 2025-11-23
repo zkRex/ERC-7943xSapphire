@@ -214,13 +214,9 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         require(_ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, _ownerOf(tokenId)));
         _excessFrozenUpdate(from , tokenId);
         
-        // Update ownership directly without calling super._update() to avoid emitting Transfer events
-        // This preserves privacy by only emitting encrypted events
-        unchecked {
-            _balances[from] -= 1;
-            _balances[to] += 1;
-        }
-        _ownerOf[tokenId] = to;
+        // Use super._update() to update balances and ownership (will emit Transfer events, but balances must be updated)
+        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
+        super._update(to, tokenId, _msgSender());
         
         ERC721Utils.checkOnERC721Received(_msgSender(), from, to, tokenId, "");
         
@@ -254,8 +250,8 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-721 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logics.
-    /// Updates ownership directly without emitting standard Transfer events to protect privacy.
-    /// Only emits encrypted events using Sapphire precompiles.
+    /// Calls super._update() to handle balance and ownership updates (will emit standard Transfer events).
+    /// Also emits encrypted events using Sapphire precompiles for additional privacy.
     /// Reverts with {ERC721IncorrectOwner} | {ERC7943FrozenTokenId} | {ERC7943CannotTransact} if any `canTransfer`/`canTransact` or other check fails.
     /// @param to The address receiving tokens (zero address for burning).
     /// @param tokenId The ID of the token being transferred.
@@ -284,24 +280,9 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
             revert ERC721NonexistentToken(tokenId);
         }
 
-        // Update ownership directly without calling super._update() to avoid emitting Transfer events
-        // This preserves privacy by only emitting encrypted events
-        address previousOwner = from;
-        
-        if (from != address(0)) {
-            // Update balance - approvals become invalid automatically when ownership changes
-            unchecked {
-                _balances[from] -= 1;
-            }
-        }
-
-        if (to != address(0)) {
-            unchecked {
-                _balances[to] += 1;
-            }
-        }
-
-        _ownerOf[tokenId] = to;
+        // Call super._update() to handle balance and ownership updates (will emit standard Transfer events)
+        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
+        address previousOwner = super._update(to, tokenId, auth);
         
         // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, tokenId, _eventNonce++);
