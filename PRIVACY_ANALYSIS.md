@@ -2,17 +2,18 @@
 
 ## Executive Summary
 
-**Status: MOSTLY FIXED** - Significant improvements have been made, but one critical issue remains.
+**Status: PARTIALLY FIXED** - Significant progress on uRWA20, uRWA721 and uRWA1155 still need migration.
 
 Your implementation has made **substantial progress** in addressing privacy concerns. Most critical issues have been resolved:
 
 **FIXED**: View functions now require `VIEWER_ROLE` access control  
 **FIXED**: Custom events are now encrypted using Sapphire precompiles  
 **FIXED**: Gas padding added to prevent side-channel leakage  
+**FIXED**: uRWA20 migrated to Solady - no longer emits standard Transfer events
 
-**REMAINING ISSUE**: Standard Transfer events from OpenZeppelin are still being emitted in plaintext, leaking transfer information.
+**REMAINING ISSUE**: uRWA721 and uRWA1155 still use OpenZeppelin and emit standard Transfer events in plaintext.
 
-**The system now provides encrypted storage, access-controlled queryability, and encrypted custom events, but still leaks transfer information through standard Transfer events.**
+**uRWA20 now provides full privacy: encrypted storage, access-controlled queryability, encrypted events, and NO standard Transfer events. uRWA721 and uRWA1155 still need migration to Solady.**
 
 ## Critical Issues
 
