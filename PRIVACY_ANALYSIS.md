@@ -72,9 +72,9 @@ The fundamental issue is that **OpenZeppelin v5 uses `private` visibility for in
 
 1. **Use Solmate as Library (Recommended)**
    ```bash
-   npm install solmate
+   pnpm add solmate
    # or
-   npm install solady  # Solmate's successor, actively maintained
+   pnpm add solady  # Solmate's successor, actively maintained
    ```
    
    **Pros:**
@@ -110,7 +110,7 @@ Use **Solady** (Solmate's successor) as a library dependency. It's actively main
 **Recommendation: Use Solady as Library Dependency**
 
 **Why Library (Recommended):**
-- ✅ Easy dependency management: `npm install solady`
+- ✅ Easy dependency management: `pnpm add solady`
 - ✅ Can receive security updates and bug fixes via package updates
 - ✅ Standard import syntax: `import {ERC20} from "solady/tokens/ERC20.sol";`
 - ✅ Less code to maintain in your repository
@@ -123,8 +123,8 @@ Use **Solady** (Solmate's successor) as a library dependency. It's actively main
 - If you're building a completely self-contained system
 
 **Implementation Steps for Library Approach:**
-1. Remove OpenZeppelin: `npm uninstall @openzeppelin/contracts`
-2. Install Solady: `npm install solady`
+1. Remove OpenZeppelin: `pnpm remove @openzeppelin/contracts`
+2. Install Solady: `pnpm add solady`
 3. Update all imports in your contracts
 4. Override `_mint`, `_burn`, `transfer`, `transferFrom` to update `balanceOf` directly
 5. Emit only encrypted events, never call `super` functions that emit Transfer events
