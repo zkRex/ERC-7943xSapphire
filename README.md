@@ -35,12 +35,16 @@ pnpm test
 REPORT_GAS=true pnpm test
 ```
 
+For detailed test results and failure analysis, see [`TESTS.md`](./TESTS.md).
+
 ## Privacy Considerations
 
 On Sapphire:
 - **Events/logs are plaintext**: Avoid emitting sensitive data (KYC status, identities, exact freeze amounts) unless intentionally encrypted or redacted
 - **Calldata and state are encrypted**: However, access patterns and gas usage can still leak information
 - **Best practices**: Use constant-size storage layouts, predictable access patterns, and consider `Sapphire.padGas` for branches that depend on private data
+
+For comprehensive analysis of encryption features, privacy gaps, and implementation status, see [`SAPPHIRE_ENCRYPTION.md`](./SAPPHIRE_ENCRYPTION.md).
 
 ## Development
 
