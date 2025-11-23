@@ -7,6 +7,7 @@ import {ERC1155Utils} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155U
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
+import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
 
 /// @title uRWA-1155 Token Contract
 /// @notice An ERC-1155 token implementation adhering to the IERC-7943 interface for Real World Assets.
@@ -18,7 +19,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant FREEZING_ROLE = keccak256("FREEZING_ROLE");
     bytes32 public constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
-    bytes32 public constant FORCE_TRANSFER_ROLE = keccak256("FORCE_TRANSFER_ROLE");  
+    bytes32 public constant FORCE_TRANSFER_ROLE = keccak256("FORCE_TRANSFER_ROLE");
+    bytes32 public constant VIEWER_ROLE = keccak256("VIEWER_ROLE");  
 
     /// @notice Mapping storing the whitelist status for each account address.
     /// @dev True indicates the account is whitelisted and allowed to interact, false otherwise.
