@@ -323,8 +323,8 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
 
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-721 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logics.
-    /// Calls super._update() to handle balance and ownership updates (will emit standard Transfer events).
-    /// Also emits encrypted events using Sapphire precompiles for additional privacy.
+    /// Updates ownership and balances directly without emitting standard Transfer events (for privacy).
+    /// Emits encrypted events using Sapphire precompiles for additional privacy.
     /// Reverts with {ERC721IncorrectOwner} | {ERC7943FrozenTokenId} | {ERC7943CannotTransact} if any `canTransfer`/`canTransact` or other check fails.
     /// @param to The address receiving tokens (zero address for burning).
     /// @param tokenId The ID of the token being transferred.
