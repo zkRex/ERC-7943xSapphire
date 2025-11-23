@@ -152,9 +152,6 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedWhitelisted(encrypted);
-        
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit Whitelisted(account, status);
     }
 
     /// @notice Creates `amount` new tokens and assigns them to `to`.
@@ -186,9 +183,6 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedFrozen(encrypted);
         
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit Frozen(account, amount);
-        
         result = true;
     }
 
@@ -205,9 +199,6 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         bytes32 nonce = bytes32(_eventNonce);
         bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
         emit EncryptedForcedTransfer(encrypted);
-        
-        // Also emit unencrypted for backward compatibility (can be removed in production)
-        emit ForcedTransfer(from, to, amount);
         
         result = true;
     }
@@ -227,9 +218,6 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
             bytes32 nonce = bytes32(_eventNonce);
             bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
             emit EncryptedFrozen(encrypted);
-            
-            // Also emit unencrypted for backward compatibility (can be removed in production)
-            emit Frozen(account,  _frozenTokens[account]);
         }
     }
 
