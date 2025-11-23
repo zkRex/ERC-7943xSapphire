@@ -236,9 +236,8 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         require(_ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, _ownerOf(tokenId)));
         _excessFrozenUpdate(from , tokenId);
         
-        // Use super._update() to update balances and ownership (will emit Transfer events, but balances must be updated)
-        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
-        super._update(to, tokenId, _msgSender());
+        // Update ownership and balances directly without emitting standard Transfer events
+        _updateOwnershipAndBalance(from, to, tokenId);
         
         ERC721Utils.checkOnERC721Received(_msgSender(), from, to, tokenId, "");
         
@@ -354,9 +353,8 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
             revert ERC721NonexistentToken(tokenId);
         }
 
-        // Call super._update() to handle balance and ownership updates (will emit standard Transfer events)
-        // Note: Standard Transfer events will be emitted, but encrypted events provide additional privacy
-        address previousOwner = super._update(to, tokenId, auth);
+        // Update ownership and balances directly without emitting standard Transfer events
+        _updateOwnershipAndBalance(from, to, tokenId);
         
         // Emit encrypted transfer event for privacy (using Sapphire precompile)
         bytes memory plaintext = abi.encode(from, to, tokenId, _eventNonce++);
@@ -368,7 +366,7 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         // Estimate worst-case gas: ~150k for transfer with all checks and encryption
         Sapphire.padGas(200000);
         
-        return previousOwner;
+        return from;
     }
 
     /// @notice See {IERC165-supportsInterface}.
