@@ -53,12 +53,6 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     /// @param encryptedData Encrypted data containing from, to, and amount.
     event EncryptedForcedTransfer(bytes encryptedData);
 
-    /// @notice Emitted when an account's whitelist status is changed.
-    /// @param account The address whose status was changed.
-    /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
-    /// @dev Deprecated: Use EncryptedWhitelisted instead. Kept for backward compatibility.
-    event Whitelisted(address indexed account, bool status);
-
     /// @notice Error used when a zero address is provided where it is not allowed.
     error NotZeroAddress();
 
