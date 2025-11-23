@@ -111,31 +111,31 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     }
 
     /// @notice Returns the balance of multiple accounts for multiple token IDs.
-    /// @dev Overrides ERC1155 balanceOfBatch to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC1155 balanceOfBatch to add access control. Requires VIEWER_ROLE.
     /// @param accounts The addresses to query balances for.
     /// @param ids The token IDs to query.
     /// @return The balances of the accounts for the token IDs.
     function balanceOfBatch(address[] memory accounts, uint256[] memory ids) public view virtual override returns (uint256[] memory) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.balanceOfBatch(accounts, ids);
     }
 
     /// @notice Returns the URI for token `id`.
-    /// @dev Overrides ERC1155 uri to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC1155 uri to add access control. Requires VIEWER_ROLE.
     /// @param id The token ID to query.
     /// @return The URI string for the token.
     function uri(uint256 id) public view virtual override returns (string memory) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.uri(id);
     }
 
     /// @notice Returns if the operator is allowed to manage all of the assets of `account`.
-    /// @dev Overrides ERC1155 isApprovedForAll to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC1155 isApprovedForAll to add access control. Requires VIEWER_ROLE.
     /// @param account The address that owns the tokens.
     /// @param operator The address that acts on behalf of the owner.
     /// @return True if operator is approved to manage account's tokens.
     function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.isApprovedForAll(account, operator);
     }
 
