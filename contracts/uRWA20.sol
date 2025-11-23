@@ -20,7 +20,8 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     bytes32 public constant FREEZING_ROLE = keccak256("FREEZING_ROLE");
     bytes32 public constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
     bytes32 public constant FORCE_TRANSFER_ROLE = keccak256("FORCE_TRANSFER_ROLE");
-    bytes32 public constant VIEWER_ROLE = keccak256("VIEWER_ROLE");    
+    bytes32 public constant VIEWER_ROLE = keccak256("VIEWER_ROLE");
+    bytes32 public constant MAIN_AUDITOR_ROLE = keccak256("MAIN_AUDITOR_ROLE");
 
     /// @notice Mapping storing the whitelist status for each account address.
     /// @dev True indicates the account is whitelisted and allowed to interact, false otherwise.
@@ -36,6 +37,35 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
 
     /// @notice Nonce counter for event encryption to ensure uniqueness.
     uint256 internal _eventNonce;
+
+    /// @notice Struct for storing decrypted transfer data.
+    /// @dev Used to temporarily store decrypted data for authorized viewers.
+    struct DecryptedTransferData {
+        address from;
+        address to;
+        uint256 amount;
+        string action;
+        uint256 timestamp;
+        uint256 nonce;
+        bool exists;
+    }
+
+    /// @notice Mapping storing decrypted data for each authorized viewer.
+    /// @dev Data is temporarily stored after successful decryption for retrieval.
+    mapping(address => DecryptedTransferData) private _lastDecryptedData;
+
+    /// @notice Struct for auditor permissions.
+    /// @dev Manages time-limited and scope-limited audit access.
+    struct AuditorPermission {
+        uint256 expiryTime;
+        bool hasFullAccess;
+        bool isActive;
+        mapping(address => bool) authorizedAddresses;
+    }
+
+    /// @notice Mapping storing auditor permissions.
+    /// @dev Main auditor has unrestricted access without needing this mapping.
+    mapping(address => AuditorPermission) public auditorPermissions;
 
     /// @notice Token name.
     string private _name;
@@ -90,6 +120,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         _grantRole(WHITELIST_ROLE, initialAdmin);
         _grantRole(FORCE_TRANSFER_ROLE, initialAdmin);
         _grantRole(VIEWER_ROLE, initialAdmin);
+        _grantRole(MAIN_AUDITOR_ROLE, initialAdmin);
 
         // Generate encryption key for event encryption
         bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA20", name_, symbol_));
@@ -232,6 +263,137 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         }
     }
 
+    /// @notice Processes and decrypts encrypted event data.
+    /// @dev Decrypts event data and stores it for the caller if authorized.
+    /// Authorization: sender, receiver, or VIEWER_ROLE holder can decrypt.
+    /// @param encryptedData The encrypted event data to decrypt.
+    /// @return success True if decryption and authorization succeeded.
+    function processDecryption(bytes memory encryptedData) external returns (bool success) {
+        // Decrypt the data using contract address as additional data
+        bytes memory decryptedData = Sapphire.decrypt(
+            _encryptionKey,
+            bytes32(0), // Nonce is embedded in plaintext for verification
+            encryptedData,
+            abi.encode(address(this)) // Bind to this contract address
+        );
+
+        // Decode the decrypted data
+        (
+            address from,
+            address to,
+            uint256 amount,
+            string memory action,
+            uint256 timestamp,
+            uint256 nonce
+        ) = abi.decode(decryptedData, (address, address, uint256, string, uint256, uint256));
+
+        // Authorization check: caller must be sender, receiver, have VIEWER_ROLE, or have auditor permission
+        bool isAuthorized =
+            msg.sender == from ||
+            msg.sender == to ||
+            hasRole(VIEWER_ROLE, msg.sender) ||
+            checkAuditorPermission(msg.sender, from) ||
+            checkAuditorPermission(msg.sender, to);
+
+        require(isAuthorized, "Not authorized to decrypt");
+
+        // Store decrypted data for caller
+        _lastDecryptedData[msg.sender] = DecryptedTransferData(
+            from, to, amount, action, timestamp, nonce, true
+        );
+
+        success = true;
+    }
+
+    /// @notice Retrieves the last decrypted data for the caller.
+    /// @dev Returns the decrypted transfer data that was previously processed.
+    /// @return from The sender address.
+    /// @return to The receiver address.
+    /// @return amount The amount transferred.
+    /// @return action The action type (e.g., "transfer", "mint", "burn").
+    /// @return timestamp The timestamp of the event.
+    /// @return nonce The nonce used for encryption.
+    function viewLastDecryptedData() external view returns (
+        address from,
+        address to,
+        uint256 amount,
+        string memory action,
+        uint256 timestamp,
+        uint256 nonce
+    ) {
+        require(_lastDecryptedData[msg.sender].exists, "No decrypted data");
+        DecryptedTransferData memory data = _lastDecryptedData[msg.sender];
+        return (data.from, data.to, data.amount, data.action, data.timestamp, data.nonce);
+    }
+
+    /// @notice Clears the last decrypted data for the caller.
+    /// @dev Allows users to clear their decrypted data from storage.
+    function clearLastDecryptedData() external {
+        delete _lastDecryptedData[msg.sender];
+    }
+
+    /// @notice Grants auditor permission with time and scope limits.
+    /// @dev Can only be called by MAIN_AUDITOR_ROLE. Enables controlled audit access.
+    /// @param auditor The address to grant auditor permissions to.
+    /// @param duration The duration in seconds for which the permission is valid (max 30 days).
+    /// @param fullAccess True for full access, false for address-specific access.
+    /// @param authorizedAddresses Array of addresses the auditor can audit (ignored if fullAccess is true).
+    function grantAuditorPermission(
+        address auditor,
+        uint256 duration,
+        bool fullAccess,
+        address[] calldata authorizedAddresses
+    ) external onlyRole(MAIN_AUDITOR_ROLE) {
+        require(auditor != address(0), "Invalid auditor address");
+        require(duration > 0 && duration <= 30 days, "Invalid duration");
+
+        AuditorPermission storage perm = auditorPermissions[auditor];
+        perm.expiryTime = block.timestamp + duration;
+        perm.hasFullAccess = fullAccess;
+        perm.isActive = true;
+
+        if (!fullAccess) {
+            for (uint i = 0; i < authorizedAddresses.length; i++) {
+                perm.authorizedAddresses[authorizedAddresses[i]] = true;
+            }
+        }
+    }
+
+    /// @notice Revokes auditor permission.
+    /// @dev Can only be called by MAIN_AUDITOR_ROLE.
+    /// @param auditor The address whose auditor permissions to revoke.
+    function revokeAuditorPermission(address auditor) external onlyRole(MAIN_AUDITOR_ROLE) {
+        auditorPermissions[auditor].isActive = false;
+    }
+
+    /// @notice Checks if an auditor has permission to access data for a specific address.
+    /// @dev Main auditor always has access. Other auditors checked based on permission settings.
+    /// @param auditor The auditor address to check.
+    /// @param targetAddress The address being audited.
+    /// @return hasPermission True if the auditor has permission, false otherwise.
+    function checkAuditorPermission(address auditor, address targetAddress)
+        public view returns (bool hasPermission) {
+        // Main auditor always has full access
+        if (hasRole(MAIN_AUDITOR_ROLE, auditor)) {
+            return true;
+        }
+
+        AuditorPermission storage perm = auditorPermissions[auditor];
+
+        // Check if permission is active and not expired
+        if (!perm.isActive || block.timestamp > perm.expiryTime) {
+            return false;
+        }
+
+        // Full access auditors can access all addresses
+        if (perm.hasFullAccess) {
+            return true;
+        }
+
+        // Otherwise, check if this specific address is authorized
+        return perm.authorizedAddresses[targetAddress];
+    }
+
     /// @notice Updates the whitelist status for a given account.
     /// @dev Can only be called by accounts holding the `WHITELIST_ROLE`.
     /// Emits an encrypted {EncryptedWhitelisted} event to protect privacy.
@@ -239,11 +401,17 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @param status The new whitelist status (true or false).
     function changeWhitelist(address account, bool status) external onlyRole(WHITELIST_ROLE) {
         _whitelist[account] = status;
-        
-        // Encrypt sensitive event data
-        bytes memory plaintext = abi.encode(account, status, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Encrypt sensitive event data with action, timestamp, and nonce
+        // Note: This is not DecryptedTransferData - it's whitelist data with different structure
+        bytes memory plaintext = abi.encode(account, status, _eventNonce);
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedWhitelisted(encrypted);
     }
 
@@ -270,16 +438,28 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @param amount The amount of tokens to mint.
     function _mint(address to, uint256 amount) internal virtual override {
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        
+
         // Update balances directly without emitting Transfer event
         _updateBalanceWithoutEvent(address(0), to, amount);
-        
-        // Emit only encrypted event
-        bytes memory plaintext = abi.encode(address(0), to, amount, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Emit only encrypted event with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            address(0),
+            to,
+            amount,
+            "mint",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedTransfer(encrypted);
-        
+
         Sapphire.padGas(200000);
     }
 
@@ -294,16 +474,28 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @param amount The amount of tokens to burn.
     function _burn(address from, uint256 amount) internal virtual override {
         _excessFrozenUpdate(from, amount);
-        
+
         // Update balances directly without emitting Transfer event
         _updateBalanceWithoutEvent(from, address(0), amount);
-        
-        // Emit only encrypted event
-        bytes memory plaintext = abi.encode(from, address(0), amount, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Emit only encrypted event with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            from,
+            address(0),
+            amount,
+            "burn",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedTransfer(encrypted);
-        
+
         Sapphire.padGas(200000);
     }
 
@@ -311,13 +503,18 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @dev Can only be called by accounts holding the `FREEZING_ROLE`
     function setFrozenTokens(address account, uint256 amount) public virtual override onlyRole(FREEZING_ROLE) returns(bool result) {
         _frozenTokens[account] = amount;
-        
+
         // Encrypt sensitive event data
-        bytes memory plaintext = abi.encode(account, amount, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        bytes memory plaintext = abi.encode(account, amount, _eventNonce);
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedFrozen(encrypted);
-        
+
         result = true;
     }
 
@@ -329,16 +526,28 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         uint256 fromBalance = super.balanceOf(from);
         require(fromBalance >= amount, InsufficientBalance());
         _excessFrozenUpdate(from, amount);
-        
+
         // Update balances directly without emitting Transfer event
         _updateBalanceWithoutEvent(from, to, amount);
-        
-        // Encrypt sensitive event data
-        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Encrypt sensitive event data with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            amount,
+            "forcedTransfer",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedForcedTransfer(encrypted);
-        
+
         Sapphire.padGas(200000);
         result = true;
     }
@@ -353,11 +562,16 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         uint256 accountBalance = super.balanceOf(account);
         if(amount > unfrozenBalance && amount <= accountBalance) {
             _frozenTokens[account] -= amount - unfrozenBalance;
-            
+
             // Encrypt sensitive event data
-            bytes memory plaintext = abi.encode(account, _frozenTokens[account], _eventNonce++);
-            bytes32 nonce = bytes32(_eventNonce);
-            bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+            bytes memory plaintext = abi.encode(account, _frozenTokens[account], _eventNonce);
+            bytes32 nonce = bytes32(_eventNonce++);
+            bytes memory encrypted = Sapphire.encrypt(
+                _encryptionKey,
+                nonce,
+                plaintext,
+                abi.encode(address(this)) // Bind to contract address
+            );
             emit EncryptedFrozen(encrypted);
         }
     }
@@ -409,16 +623,28 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         require(fromBalance >= amount, InsufficientBalance());
         uint256 unfrozenFromBalance = _unfrozenBalance(from);
         require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
-        
+
         // Update balances directly without emitting Transfer event
         _updateBalanceWithoutEvent(from, to, amount);
-        
-        // Emit only encrypted event
-        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Emit only encrypted event with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            amount,
+            "transfer",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedTransfer(encrypted);
-        
+
         Sapphire.padGas(200000);
         return true;
     }
@@ -447,16 +673,28 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
                 sstore(allowanceSlot, sub(sload(allowanceSlot), amount))
             }
         }
-        
+
         // Update balances directly without emitting Transfer event
         _updateBalanceWithoutEvent(from, to, amount);
-        
-        // Emit only encrypted event
-        bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Emit only encrypted event with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            amount,
+            "transferFrom",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedTransfer(encrypted);
-        
+
         Sapphire.padGas(200000);
         return true;
     }
