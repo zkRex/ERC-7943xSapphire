@@ -113,20 +113,20 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     }
 
     /// @notice Returns the total supply of tokens.
-    /// @dev Overrides ERC20 totalSupply to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC20 totalSupply to add access control. Requires VIEWER_ROLE.
     /// @return The total supply of tokens.
     function totalSupply() public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.totalSupply();
     }
 
     /// @notice Returns the amount of tokens that an owner allowed to a spender.
-    /// @dev Overrides ERC20 allowance to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC20 allowance to add access control. Requires VIEWER_ROLE.
     /// @param owner The address which owns the funds.
     /// @param spender The address which will spend the funds.
     /// @return The amount of tokens still available for the spender.
     function allowance(address owner, address spender) public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.allowance(owner, spender);
     }
 
