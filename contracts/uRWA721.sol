@@ -45,6 +45,22 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     /// @notice Nonce counter for event encryption to ensure uniqueness.
     uint256 internal _eventNonce;
 
+    /// @notice Struct for storing decrypted transfer data.
+    /// @dev Used to temporarily store decrypted data for authorized viewers.
+    struct DecryptedTransferData {
+        address from;
+        address to;
+        uint256 tokenId;
+        string action;
+        uint256 timestamp;
+        uint256 nonce;
+        bool exists;
+    }
+
+    /// @notice Mapping storing decrypted data for each authorized viewer.
+    /// @dev Data is temporarily stored after successful decryption for retrieval.
+    mapping(address => DecryptedTransferData) private _lastDecryptedData;
+
     /// @notice Token name.
     string private _name;
 
@@ -184,6 +200,73 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         return super.isApprovedForAll(owner, operator);
     }
 
+    /// @notice Processes and decrypts encrypted event data.
+    /// @dev Decrypts event data and stores it for the caller if authorized.
+    /// Authorization: sender, receiver, or VIEWER_ROLE holder can decrypt.
+    /// @param encryptedData The encrypted event data to decrypt.
+    /// @return success True if decryption and authorization succeeded.
+    function processDecryption(bytes memory encryptedData) external returns (bool success) {
+        // Decrypt the data using contract address as additional data
+        bytes memory decryptedData = Sapphire.decrypt(
+            _encryptionKey,
+            bytes32(0), // Nonce is embedded in plaintext for verification
+            encryptedData,
+            abi.encode(address(this)) // Bind to this contract address
+        );
+
+        // Decode the decrypted data
+        (
+            address from,
+            address to,
+            uint256 tokenId,
+            string memory action,
+            uint256 timestamp,
+            uint256 nonce
+        ) = abi.decode(decryptedData, (address, address, uint256, string, uint256, uint256));
+
+        // Authorization check: caller must be sender, receiver, or have VIEWER_ROLE
+        bool isAuthorized =
+            msg.sender == from ||
+            msg.sender == to ||
+            hasRole(VIEWER_ROLE, msg.sender);
+
+        require(isAuthorized, "Not authorized to decrypt");
+
+        // Store decrypted data for caller
+        _lastDecryptedData[msg.sender] = DecryptedTransferData(
+            from, to, tokenId, action, timestamp, nonce, true
+        );
+
+        success = true;
+    }
+
+    /// @notice Retrieves the last decrypted data for the caller.
+    /// @dev Returns the decrypted transfer data that was previously processed.
+    /// @return from The sender address.
+    /// @return to The receiver address.
+    /// @return tokenId The token ID transferred.
+    /// @return action The action type (e.g., "transfer", "mint", "burn").
+    /// @return timestamp The timestamp of the event.
+    /// @return nonce The nonce used for encryption.
+    function viewLastDecryptedData() external view returns (
+        address from,
+        address to,
+        uint256 tokenId,
+        string memory action,
+        uint256 timestamp,
+        uint256 nonce
+    ) {
+        require(_lastDecryptedData[msg.sender].exists, "No decrypted data");
+        DecryptedTransferData memory data = _lastDecryptedData[msg.sender];
+        return (data.from, data.to, data.tokenId, data.action, data.timestamp, data.nonce);
+    }
+
+    /// @notice Clears the last decrypted data for the caller.
+    /// @dev Allows users to clear their decrypted data from storage.
+    function clearLastDecryptedData() external {
+        delete _lastDecryptedData[msg.sender];
+    }
+
     /// @notice Updates the whitelist status for a given account.
     /// @dev Can only be called by accounts holding the `WHITELIST_ROLE`.
     /// Emits an encrypted {EncryptedWhitelisted} event to protect privacy.
@@ -191,11 +274,16 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
     function changeWhitelist(address account, bool status) external virtual onlyRole(WHITELIST_ROLE) {
         _whitelist[account] = status;
-        
+
         // Encrypt sensitive event data
-        bytes memory plaintext = abi.encode(account, status, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        bytes memory plaintext = abi.encode(account, status, _eventNonce);
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedWhitelisted(encrypted);
     }
 
@@ -222,15 +310,20 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
 
     /// @inheritdoc IERC7943NonFungible
     /// @dev Can only be called by accounts holding the `FREEZING_ROLE`
-    function setFrozenTokens(address account, uint256 tokenId, bool frozenStatus) public virtual override onlyRole(FREEZING_ROLE) returns(bool result) {        
+    function setFrozenTokens(address account, uint256 tokenId, bool frozenStatus) public virtual override onlyRole(FREEZING_ROLE) returns(bool result) {
         _frozenTokens[account][tokenId] = frozenStatus;
-        
+
         // Encrypt sensitive event data
-        bytes memory plaintext = abi.encode(account, tokenId, frozenStatus, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        bytes memory plaintext = abi.encode(account, tokenId, frozenStatus, _eventNonce);
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedFrozen(encrypted);
-        
+
         result = true;
     }
 
@@ -282,18 +375,30 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
         require(_ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, _ownerOf(tokenId)));
         _excessFrozenUpdate(from , tokenId);
-        
+
         // Update ownership and balances directly without emitting standard Transfer events
         _updateOwnershipAndBalance(from, to, tokenId);
-        
+
         _checkOnERC721Received(_msgSender(), from, to, tokenId, "");
-        
-        // Encrypt sensitive event data
-        bytes memory plaintext = abi.encode(from, to, tokenId, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+
+        // Encrypt sensitive event data with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            tokenId,
+            "forcedTransfer",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedForcedTransfer(encrypted);
-        
+
         result = true;
     }
 
@@ -307,11 +412,16 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     function _excessFrozenUpdate(address from, uint256 tokenId) internal {
         if(_frozenTokens[from][tokenId]) {
             delete _frozenTokens[from][tokenId];
-            
+
             // Encrypt sensitive event data
-            bytes memory plaintext = abi.encode(from, tokenId, false, _eventNonce++);
-            bytes32 nonce = bytes32(_eventNonce);
-            bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+            bytes memory plaintext = abi.encode(from, tokenId, false, _eventNonce);
+            bytes32 nonce = bytes32(_eventNonce++);
+            bytes memory encrypted = Sapphire.encrypt(
+                _encryptionKey,
+                nonce,
+                plaintext,
+                abi.encode(address(this)) // Bind to contract address
+            );
             emit EncryptedFrozen(encrypted);
         }
     }
@@ -403,17 +513,39 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
 
         // Update ownership and balances directly without emitting standard Transfer events
         _updateOwnershipAndBalance(from, to, tokenId);
-        
+
+        // Determine action type
+        string memory action;
+        if (isMint) {
+            action = "mint";
+        } else if (isBurn) {
+            action = "burn";
+        } else {
+            action = "transfer";
+        }
+
         // Emit encrypted transfer event for privacy (using Sapphire precompile)
-        bytes memory plaintext = abi.encode(from, to, tokenId, _eventNonce++);
-        bytes32 nonce = bytes32(_eventNonce);
-        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        bytes memory plaintext = abi.encode(
+            from,
+            to,
+            tokenId,
+            action,
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
         emit EncryptedTransfer(encrypted);
-        
+
         // Pad gas to prevent side-channel leakage from conditional branches
         // Estimate worst-case gas: ~150k for transfer with all checks and encryption
         Sapphire.padGas(200000);
-        
+
         return from;
     }
 
