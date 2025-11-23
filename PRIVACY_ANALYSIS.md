@@ -105,6 +105,30 @@ Use **Solady** (Solmate's successor) as a library dependency. It's actively main
 **Reference**: 
 > "Unmodified contracts may leak state through logs. Base contracts like those provided by OpenZeppelin often emit logs containing private information. If you don't know they're doing that, you might undermine the confidentiality of your state."
 
+**Library vs Manual Copy Decision:**
+
+**Recommendation: Use Solady as Library Dependency**
+
+**Why Library (Recommended):**
+- ✅ Easy dependency management: `npm install solady`
+- ✅ Can receive security updates and bug fixes via package updates
+- ✅ Standard import syntax: `import {ERC20} from "solady/tokens/ERC20.sol";`
+- ✅ Less code to maintain in your repository
+- ✅ Solady is actively maintained (Solmate is not)
+
+**When to Copy Manually:**
+- If you need to make custom modifications to the base contracts
+- If you want to avoid any external dependencies
+- If you need to ensure a specific version is always used
+- If you're building a completely self-contained system
+
+**Implementation Steps for Library Approach:**
+1. Remove OpenZeppelin: `npm uninstall @openzeppelin/contracts`
+2. Install Solady: `npm install solady`
+3. Update all imports in your contracts
+4. Override `_mint`, `_burn`, `transfer`, `transferFrom` to update `balanceOf` directly
+5. Emit only encrypted events, never call `super` functions that emit Transfer events
+
 ### 2. Public Queryability: View Functions Expose Private State [FIXED ✅]
 
 **Status**: ✅ **RESOLVED** - All view functions now require `VIEWER_ROLE` access control
@@ -206,49 +230,109 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
 
 ### Immediate Actions (Critical)
 
-1. **Suppress Standard Transfer Events** ⚠️ **REMAINING ISSUE**
+1. **Switch from OpenZeppelin to Solmate/Solady** ⚠️ **REMAINING ISSUE**
    
-   The standard Transfer events from OpenZeppelin are still being emitted. To fully fix this:
+   **Why OpenZeppelin Can't Be Used:**
+   - OpenZeppelin v5 uses `private` visibility for `_balances`, `_owners`, `_totalSupply`
+   - Cannot access these directly from child contracts
+   - Must call `super._update()` which emits Transfer events
+   - Cannot override without emitting events
    
-   **Option A: Fork OpenZeppelin (Recommended)**
-   ```solidity
-   // Create modified ERC20/ERC721/ERC1155 that don't emit Transfer events
-   // Then manually update balances/ownership in _update without calling super
+   **Solution: Migrate to Solmate/Solady**
+   
+   **Step 1: Install Solady (Recommended - actively maintained)**
+   ```bash
+   npm install solady
    ```
    
-   **Option B: Override Without super._update()**
+   Or install Solmate (no longer actively maintained):
+   ```bash
+   npm install solmate
+   ```
+   
+   **Step 2: Update Imports**
    ```solidity
-   function _update(address from, address to, uint256 amount) internal override {
-       // ... your validation logic ...
+   // Replace:
+   import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+   
+   // With:
+   import {ERC20} from "solady/tokens/ERC20.sol";
+   // or
+   import {ERC20} from "solmate/tokens/ERC20.sol";
+   ```
+   
+   **Step 3: Override Functions Without Calling Parent**
+   
+   **For ERC20:**
+   ```solidity
+   import {ERC20} from "solady/tokens/ERC20.sol";
+   
+   contract uRWA20 is ERC20, AccessControlEnumerable, IERC7943Fungible {
+       // ... existing code ...
        
-       // Manually update balances instead of calling super._update()
-       if (from != address(0)) {
-           _balances[from] -= amount;
-       }
-       if (to != address(0)) {
-           _balances[to] += amount;
-       }
-       if (from == address(0)) {
-           _totalSupply += amount;
-       }
-       if (to == address(0)) {
-           _totalSupply -= amount;
+       function _mint(address to, uint256 amount) internal override {
+           // Update balances directly (balanceOf is public in Solmate/Solady)
+           totalSupply += amount;
+           unchecked {
+               balanceOf[to] += amount;
+           }
+           // Don't call super._mint() - that would emit Transfer event
+           // Emit only encrypted event
+           bytes memory plaintext = abi.encode(address(0), to, amount, _eventNonce++);
+           bytes32 nonce = bytes32(_eventNonce);
+           bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+           emit EncryptedTransfer(encrypted);
        }
        
-       // Emit only encrypted event
-       bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
-       bytes32 nonce = bytes32(_eventNonce);
-       bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
-       emit EncryptedTransfer(encrypted);
+       function _burn(address from, uint256 amount) internal override {
+           balanceOf[from] -= amount;
+           unchecked {
+               totalSupply -= amount;
+           }
+           // Emit only encrypted event
+           bytes memory plaintext = abi.encode(from, address(0), amount, _eventNonce++);
+           bytes32 nonce = bytes32(_eventNonce);
+           bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+           emit EncryptedTransfer(encrypted);
+       }
        
-       Sapphire.padGas(200000);
+       function transfer(address to, uint256 amount) public override returns (bool) {
+           // Your custom transfer logic with whitelist checks
+           require(_isWhitelisted(msg.sender), ERC7943CannotTransact(msg.sender));
+           require(_isWhitelisted(to), ERC7943CannotTransact(to));
+           // ... frozen token checks ...
+           
+           // Update balance directly
+           balanceOf[msg.sender] -= amount;
+           unchecked {
+               balanceOf[to] += amount;
+           }
+           
+           // Emit only encrypted event
+           bytes memory plaintext = abi.encode(msg.sender, to, amount, _eventNonce++);
+           bytes32 nonce = bytes32(_eventNonce);
+           bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+           emit EncryptedTransfer(encrypted);
+           
+           Sapphire.padGas(200000);
+           return true;
+       }
+       
+       function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+           // Similar implementation - update balances directly, emit only encrypted event
+       }
    }
    ```
    
-   **Option C: Accept Tradeoff**
-   - Keep standard Transfer events for ERC compliance
-   - Document that privacy is limited by standard event emissions
-   - Rely on encrypted events for additional privacy layer
+   **For ERC721 and ERC1155:**
+   - Similar pattern: override `_mint`, `_burn`, and transfer functions
+   - Update `balanceOf`, `ownerOf` (ERC721), or `balanceOf[account][id]` (ERC1155) directly
+   - Emit only encrypted events, not standard Transfer events
+   
+   **Alternative: Copy Files Manually**
+   - If you prefer not to use a library dependency, copy Solmate/Solady contract files into `contracts/lib/`
+   - Modify imports to use local copies: `import {ERC20} from "./lib/ERC20.sol";`
+   - Gives full control but requires manual updates
 
 ### Completed Actions ✅
 
@@ -318,10 +402,10 @@ Your current tests don't verify privacy. Consider adding:
 
 **Impact**: Transfer history is publicly visible through standard events, even though encrypted events are also emitted.
 
-**Options**:
-1. **Fork OpenZeppelin** to remove Transfer event emissions (most privacy-preserving)
-2. **Override _update** without calling super (requires manual balance/ownership updates)
-3. **Accept tradeoff** for ERC compliance (document privacy limitation)
+**Solution**:
+1. **Switch to Solmate/Solady** - Use library with public state variables (recommended)
+2. **Copy Solmate files manually** - Full control, no external dependencies
+3. **Accept tradeoff** - Keep OpenZeppelin but acknowledge privacy limitation (not recommended)
 
 ### Overall Assessment:
 
