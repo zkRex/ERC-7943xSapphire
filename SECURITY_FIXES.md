@@ -136,3 +136,4 @@ After deployment, verify:
 5. Encrypted events can be decrypted by authorized parties
 6. `approve()` and `permit()` reject non-whitelisted addresses
 
+
