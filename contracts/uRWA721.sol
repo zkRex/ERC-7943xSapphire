@@ -211,7 +211,7 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     function forcedTransfer(address from, address to, uint256 tokenId) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(to != address(0), ERC721InvalidReceiver(address(0)));
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
-        require(ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, ownerOf(tokenId)));
+        require(_ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, _ownerOf(tokenId)));
         _excessFrozenUpdate(from , tokenId);
         super._update(to, tokenId, address(0)); // Skip _update override
         ERC721Utils.checkOnERC721Received(_msgSender(), from, to, tokenId, "");
