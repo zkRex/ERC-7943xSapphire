@@ -79,10 +79,9 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     }
 
     /// @inheritdoc IERC7943Fungible
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransfer(address from, address to, uint256 amount) public virtual override view returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         uint256 fromBalance = balanceOf(from);
         if (fromBalance < _frozenTokens[from]) return allowed;
         if (amount > fromBalance - _frozenTokens[from]) return allowed;
@@ -91,27 +90,25 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     }
 
     /// @inheritdoc IERC7943Fungible
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public virtual override view returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         allowed = _whitelist[account] ? true : false;
     }
 
     /// @inheritdoc IERC7943Fungible
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function getFrozenTokens(address account) public virtual override view returns (uint256 amount) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         amount = _frozenTokens[account];
     }
 
     /// @notice Returns the balance of the account.
-    /// @dev Overrides ERC20 balanceOf to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC20 balanceOf to add access control. Requires VIEWER_ROLE.
     /// @param account The address to query the balance of.
     /// @return The balance of the account.
     function balanceOf(address account) public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.balanceOf(account);
     }
 
