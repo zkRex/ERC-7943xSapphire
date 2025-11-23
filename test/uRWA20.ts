@@ -175,13 +175,13 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(hash, publicClient);
       
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.true;
     });
 
     it("Should revert when called by non-whitelist role", async function () {
       // Verify otherAccount does not have WHITELIST_ROLE
-      const whitelistRole = await token.read.WHITELIST_ROLE();
-      expect(await token.read.hasRole([whitelistRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const whitelistRole = await readToken("WHITELIST_ROLE", []);
+      expect(await readToken("hasRole", [whitelistRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
@@ -210,7 +210,7 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(mintHash, publicClient);
       
-      expect(await token.read.balanceOf([getAddress(otherAccount.account.address)])).to.equal(parseEther("100"));
+      expect(await readToken("balanceOf", [getAddress(otherAccount.account.address)])).to.equal(parseEther("100"));
     });
 
     it("Should revert when minting to non-whitelisted account", async function () {
@@ -222,7 +222,7 @@ describe("uRWA20", function () {
       await waitForTx(hash, publicClient);
       
       // Verify account is not whitelisted
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
       
       // Use simulateContract to check if it would revert
       await expect(
@@ -245,8 +245,8 @@ describe("uRWA20", function () {
       await waitForTxs([hash1, hash2], publicClient);
 
       // Verify otherAccount does NOT have MINTER_ROLE
-      const minterRole = await token.read.MINTER_ROLE();
-      expect(await token.read.hasRole([minterRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const minterRole = await readToken("MINTER_ROLE", []);
+      expect(await readToken("hasRole", [minterRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       // otherAccount does NOT have MINTER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
@@ -289,7 +289,7 @@ describe("uRWA20", function () {
       const burnHash = await token.write.burn([parseEther("50")]);
       await waitForTx(burnHash, publicClient);
       
-      expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
     });
 
     it("Should revert when called by non-burner role", async function () {
@@ -306,8 +306,8 @@ describe("uRWA20", function () {
       await waitForTx(mintHash, publicClient);
 
       // Verify otherAccount does NOT have BURNER_ROLE
-      const burnerRole = await token.read.BURNER_ROLE();
-      expect(await token.read.hasRole([burnerRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const burnerRole = await readToken("BURNER_ROLE", []);
+      expect(await readToken("hasRole", [burnerRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       // otherAccount does NOT have BURNER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
@@ -339,13 +339,13 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(freezeHash, publicClient);
       
-      expect(await token.read.getFrozenTokens([getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("getFrozenTokens", [getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
     });
 
     it("Should revert when called by non-freezing role", async function () {
       // Verify otherAccount does NOT have FREEZING_ROLE
-      const freezingRole = await token.read.FREEZING_ROLE();
-      expect(await token.read.hasRole([freezingRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const freezingRole = await readToken("FREEZING_ROLE", []);
+      expect(await readToken("hasRole", [freezingRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       // otherAccount does NOT have FREEZING_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
@@ -384,8 +384,8 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(transferHash, publicClient);
       
-      expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("50"));
-      expect(await token.read.balanceOf([getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("balanceOf", [getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
     });
 
     it("Should revert transfer from non-whitelisted account", async function () {
@@ -476,11 +476,11 @@ describe("uRWA20", function () {
       await waitForTx(freezeHash, publicClient);
 
       // Verify frozen tokens
-      expect(await token.read.getFrozenTokens([getAddress(owner.account.address)])).to.equal(parseEther("60"));
-      expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("100"));
+      expect(await readToken("getFrozenTokens", [getAddress(owner.account.address)])).to.equal(parseEther("60"));
+      expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("100"));
       
       // Verify canTransfer returns false
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         parseEther("50"),
@@ -530,11 +530,11 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(forceHash, publicClient);
       
-      expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("50"));
-      expect(await token.read.balanceOf([getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("balanceOf", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("balanceOf", [getAddress(otherAccount.account.address)])).to.equal(parseEther("50"));
       // Frozen tokens should be reduced since we transferred from frozen balance
       // Unfrozen was 40, we transferred 50, so we took 10 from frozen: 60 - 10 = 50
-      expect(await token.read.getFrozenTokens([getAddress(owner.account.address)])).to.equal(parseEther("50"));
+      expect(await readToken("getFrozenTokens", [getAddress(owner.account.address)])).to.equal(parseEther("50"));
     });
 
     it("Should revert when called by non-force-transfer role", async function () {
@@ -591,7 +591,7 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(mintHash, publicClient);
 
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         parseEther("50"),
@@ -621,7 +621,7 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(freezeHash, publicClient);
 
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         parseEther("50"),
