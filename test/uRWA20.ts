@@ -11,6 +11,7 @@ describe("uRWA20", function () {
   this.timeout(120000); // 2 minutes timeout for all tests
   
   let token: any;
+  let tokenForReads: any; // Wallet-backed contract instance for view calls on Sapphire
   let owner: any;
   let otherAccount: any;
   let thirdAccount: any;
@@ -47,8 +48,17 @@ describe("uRWA20", function () {
     ]);
     await waitForTx(hash2, client);
 
+    // On Sapphire, view calls must be signed. Create a contract instance with wallet client for reads.
+    // Note: viem's contract.read.* uses the public client, so we need to use wallet-backed instances.
+    const tokenForReads = hre.network.name === "sapphire-localnet" 
+      ? await hre.viem.getContractAt("uRWA20", tokenContract.address, { 
+          client: { public: client, wallet: ownerWallet } 
+        })
+      : tokenContract;
+
     return {
-      token: tokenContract,
+      token: tokenContract, // Keep original for write operations
+      tokenForReads, // Use this for read operations on Sapphire
       owner: ownerWallet,
       otherAccount: otherAccountWallet,
       thirdAccount: thirdAccountWallet,
@@ -59,6 +69,7 @@ describe("uRWA20", function () {
   beforeEach(async function () {
     const fixture = await deployTokenFixture();
     token = fixture.token;
+    tokenForReads = fixture.tokenForReads || fixture.token; // Fallback to token if not Sapphire
     owner = fixture.owner;
     otherAccount = fixture.otherAccount;
     thirdAccount = fixture.thirdAccount;
