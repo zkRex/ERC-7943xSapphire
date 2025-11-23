@@ -273,7 +273,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         require(from != address(0) && to != address(0), NotZeroAddress());
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
         uint256 fromBalance = balanceOf(from);
-        require(fromBalance >= amount, ERC20.InsufficientBalance());
+        require(fromBalance >= amount, InsufficientBalance());
         _excessFrozenUpdate(from, amount);
         
         // Update balances directly without emitting Transfer event
@@ -333,7 +333,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         
         if (isTransfer) { // Transfer
             uint256 fromBalance = balanceOf(from);
-            require(fromBalance >= amount, ERC20.InsufficientBalance());
+            require(fromBalance >= amount, InsufficientBalance());
             uint256 unfrozenFromBalance = _unfrozenBalance(from);
             require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
             require(_isWhitelisted(from), ERC7943CannotTransact(from));
@@ -366,7 +366,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
         
         uint256 fromBalance = balanceOf(from);
-        require(fromBalance >= amount, ERC20.InsufficientBalance());
+        require(fromBalance >= amount, InsufficientBalance());
         uint256 unfrozenFromBalance = _unfrozenBalance(from);
         require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
         
@@ -390,7 +390,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
         
         uint256 fromBalance = balanceOf(from);
-        require(fromBalance >= amount, ERC20.InsufficientBalance());
+        require(fromBalance >= amount, InsufficientBalance());
         uint256 unfrozenFromBalance = _unfrozenBalance(from);
         require(amount <= unfrozenFromBalance, ERC7943InsufficientUnfrozenBalance(from, amount, unfrozenFromBalance));
         
@@ -398,7 +398,7 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
         address spender = _msgSender();
         uint256 currentAllowance = allowance(from, spender);
         if (currentAllowance != type(uint256).max) {
-            require(currentAllowance >= amount, ERC20.InsufficientAllowance());
+            require(currentAllowance >= amount, InsufficientAllowance());
             /// @solidity memory-safe-assembly
             assembly {
                 mstore(0x20, spender)
