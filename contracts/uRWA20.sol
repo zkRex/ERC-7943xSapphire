@@ -190,8 +190,15 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible {
     function forcedTransfer(address from, address to, uint256 amount) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(from != address(0) && to != address(0), NotZeroAddress());
         require(_isWhitelisted(to), ERC7943CannotTransact(to));
+        require(_balances[from] >= amount, ERC20InsufficientBalance(from, _balances[from], amount));
         _excessFrozenUpdate(from, amount);
-        super._update(from, to, amount); // Directly update balances, bypassing overridden _update
+        
+        // Update balances directly without calling super._update() to avoid emitting Transfer events
+        // This preserves privacy by only emitting encrypted events
+        unchecked {
+            _balances[from] -= amount;
+            _balances[to] += amount;
+        }
         
         // Encrypt sensitive event data
         bytes memory plaintext = abi.encode(from, to, amount, _eventNonce++);
