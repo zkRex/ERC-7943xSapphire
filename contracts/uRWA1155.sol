@@ -85,11 +85,19 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         allowed = true;
     }
 
+    /// @notice Internal helper to check whitelist status without access control.
+    /// @dev Used internally by _update to check whitelist during transfers.
+    /// @param account The address to check.
+    /// @return allowed True if the account is whitelisted, false otherwise.
+    function _isWhitelisted(address account) internal view returns (bool allowed) {
+        allowed = _whitelist[account];
+    }
+
     /// @inheritdoc IERC7943MultiToken
     /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public view virtual override returns (bool allowed) {
         require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
-        allowed = _whitelist[account] ? true : false;
+        allowed = _isWhitelisted(account);
     }
 
     /// @inheritdoc IERC7943MultiToken
@@ -191,7 +199,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @inheritdoc IERC7943MultiToken
     /// @dev Can only be called by accounts holding the `FORCE_TRANSFER_ROLE`.
     function forcedTransfer(address from, address to, uint256 tokenId, uint256 amount) public onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
-        require(canTransact(to), ERC7943CannotTransact(to));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
 
         // Reimplementing _safeTransferFrom to avoid the check on _update
         if (to == address(0)) {
@@ -283,11 +291,11 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
 
                 require(value <= balanceOf(from, id), ERC1155InsufficientBalance(from, balanceOf(from, id), value, id));
                 require(value <= unfrozenBalance, ERC7943InsufficientUnfrozenBalance(from, id, value, unfrozenBalance));
-                require(canTransact(from), ERC7943CannotTransact(from));
-                require(canTransact(to), ERC7943CannotTransact(to));
+                require(_isWhitelisted(from), ERC7943CannotTransact(from));
+                require(_isWhitelisted(to), ERC7943CannotTransact(to));
             }
         } else if (from == address(0) && to != address(0)) { // Mint
-            require(canTransact(to), ERC7943CannotTransact(to));
+            require(_isWhitelisted(to), ERC7943CannotTransact(to));
         } else if (to == address(0)) { // Burn
             for (uint256 j = 0; j < ids.length; ++j) {
                 _excessFrozenUpdate(from, ids[j], values[j]);
