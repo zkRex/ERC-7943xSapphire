@@ -2,9 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {IERC7943NonFungible} from "./interfaces/IERC7943.sol";
-import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import {ERC721Utils} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Utils.sol";
-import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import {ERC721} from "solady/src/tokens/ERC721.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
@@ -38,6 +36,12 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     /// @notice Nonce counter for event encryption to ensure uniqueness.
     uint256 internal _eventNonce;
 
+    /// @notice Token name.
+    string private _name;
+
+    /// @notice Token symbol.
+    string private _symbol;
+
     /// @notice Emitted when an account's whitelist status is changed (encrypted).
     /// @param encryptedData Encrypted data containing account and status.
     event EncryptedWhitelisted(bytes encryptedData);
@@ -58,10 +62,12 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     /// @dev Initializes the ERC-721 token with name and symbol, and grants all roles
     /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
     /// Generates an encryption key for encrypting sensitive events.
-    /// @param name The name of the token collection.
-    /// @param symbol The symbol of the token collection.
+    /// @param name_ The name of the token collection.
+    /// @param symbol_ The symbol of the token collection.
     /// @param initialAdmin The address to receive initial administrative and operational roles.
-    constructor(string memory name, string memory symbol, address initialAdmin) ERC721(name, symbol) {
+    constructor(string memory name_, string memory symbol_, address initialAdmin) {
+        _name = name_;
+        _symbol = symbol_;
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
         _grantRole(MINTER_ROLE, initialAdmin);
         _grantRole(BURNER_ROLE, initialAdmin);
@@ -71,9 +77,25 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         _grantRole(VIEWER_ROLE, initialAdmin);
         
         // Generate encryption key for event encryption
-        bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA721", name, symbol));
+        bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA721", name_, symbol_));
         _encryptionKey = bytes32(randomBytes);
         _eventNonce = 0;
+    }
+
+    /// @dev Returns the name of the token collection.
+    function name() public view virtual override returns (string memory) {
+        return _name;
+    }
+
+    /// @dev Returns the symbol of the token collection.
+    function symbol() public view virtual override returns (string memory) {
+        return _symbol;
+    }
+
+    /// @dev Returns the Uniform Resource Identifier (URI) for token `id`.
+    function tokenURI(uint256 id) public view virtual override returns (string memory) {
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+        return super.tokenURI(id);
     }
 
     /// @inheritdoc IERC7943NonFungible
