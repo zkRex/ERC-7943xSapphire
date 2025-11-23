@@ -86,6 +86,11 @@ describe("uRWA20 Encryption & Auditing", function () {
         // We need at least 4 accounts: owner, user1, user2, auditor
         const [ownerWallet, user1Wallet, user2Wallet, auditorWallet] = walletClients;
 
+        // Ensure accounts are distinct
+        expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(ownerWallet.account.address));
+        expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user1Wallet.account.address));
+        expect(getAddress(auditorWallet.account.address)).to.not.equal(getAddress(user2Wallet.account.address));
+
         const client = useSapphireLocalnet
             ? await hre.viem.getPublicClient({ chain })
             : await hre.viem.getPublicClient();
@@ -295,7 +300,7 @@ describe("uRWA20 Encryption & Auditing", function () {
             const decryptHash = await tokenAsAuditor.write.processDecryption([encryptedData]);
             await waitForTx(decryptHash, publicClient);
 
-            const data = await tokenAsAuditor.read.viewLastDecryptedData();
+            const data = await readDecryptedData(auditor);
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address));
         });
 
@@ -337,7 +342,7 @@ describe("uRWA20 Encryption & Auditing", function () {
             const decryptHash = await tokenAsAuditor.write.processDecryption([encryptedData]);
             await waitForTx(decryptHash, publicClient);
 
-            const data = await tokenAsAuditor.read.viewLastDecryptedData();
+            const data = await readDecryptedData(auditor);
             expect(getAddress(data[0])).to.equal(getAddress(user1.account.address));
         });
 
