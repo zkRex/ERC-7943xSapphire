@@ -30,14 +30,39 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @dev It gives the amount of tokens corresponding to a `tokenId` that are frozen in `account` wallet.
     mapping(address account => mapping(uint256 tokenId => uint256 amount)) internal _frozenTokens;
 
+    /// @notice Encryption key for encrypting sensitive event data.
+    /// @dev Generated once in constructor and used for all event encryption.
+    bytes32 internal _encryptionKey;
+
+    /// @notice Nonce counter for event encryption to ensure uniqueness.
+    uint256 internal _eventNonce;
+
+    /// @notice Emitted when an account's whitelist status is changed (encrypted).
+    /// @param encryptedData Encrypted data containing account and status.
+    event EncryptedWhitelisted(bytes encryptedData);
+
+    /// @notice Emitted when tokens are transferred (encrypted).
+    /// @param encryptedData Encrypted data containing from, to, ids, and values.
+    event EncryptedTransfer(bytes encryptedData);
+
+    /// @notice Emitted when tokens are frozen (encrypted).
+    /// @param encryptedData Encrypted data containing account, tokenId, and amount.
+    event EncryptedFrozen(bytes encryptedData);
+
+    /// @notice Emitted when a forced transfer occurs (encrypted).
+    /// @param encryptedData Encrypted data containing from, to, tokenId, and amount.
+    event EncryptedForcedTransfer(bytes encryptedData);
+
     /// @notice Emitted when an account's whitelist status is changed.
     /// @param account The address whose status was changed.
     /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
+    /// @dev Deprecated: Use EncryptedWhitelisted instead. Kept for backward compatibility.
     event Whitelisted(address indexed account, bool status);
 
     /// @notice Contract constructor.
     /// @dev Initializes the ERC-1155 token with a URI and grants all roles
-    /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist) to the `initialAdmin`.
+    /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
+    /// Generates an encryption key for encrypting sensitive events.
     /// @param uri The URI for the token metadata.
     /// @param initialAdmin The address to receive initial administrative and operational roles.
     constructor(string memory uri, address initialAdmin) ERC1155(uri) {
@@ -47,6 +72,12 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         _grantRole(FREEZING_ROLE, initialAdmin);
         _grantRole(WHITELIST_ROLE, initialAdmin);
         _grantRole(FORCE_TRANSFER_ROLE, initialAdmin);
+        _grantRole(VIEWER_ROLE, initialAdmin);
+        
+        // Generate encryption key for event encryption
+        bytes memory randomBytes = Sapphire.randomBytes(32, abi.encodePacked("uRWA1155", uri));
+        _encryptionKey = bytes32(randomBytes);
+        _eventNonce = 0;
     }
 
     /// @inheritdoc IERC7943MultiToken
