@@ -77,10 +77,9 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     }
 
     /// @inheritdoc IERC7943NonFungible
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransfer(address from, address to, uint256 tokenId) public view virtual override returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         address owner = _ownerOf(tokenId);
         if (owner != from || owner == address(0)) return allowed;
         if (_frozenTokens[from][tokenId]) return allowed;
@@ -98,56 +97,55 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     }
 
     /// @inheritdoc IERC7943NonFungible
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function getFrozenTokens(address account, uint256 tokenId) public virtual override view returns (bool frozenStatus) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         frozenStatus = _frozenTokens[account][tokenId];
     }
 
     /// @notice Returns the number of tokens in owner's account.
-    /// @dev Overrides ERC721 balanceOf to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC721 balanceOf to add access control. Requires VIEWER_ROLE.
     /// @param owner The address to query the balance of.
     /// @return The number of tokens owned by owner.
     function balanceOf(address owner) public view virtual override returns (uint256) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.balanceOf(owner);
     }
 
     /// @notice Returns the owner of the token ID.
-    /// @dev Overrides ERC721 ownerOf to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC721 ownerOf to add access control. Requires VIEWER_ROLE.
     /// @param tokenId The token ID to query.
     /// @return The address of the token owner.
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.ownerOf(tokenId);
     }
 
     /// @notice Returns the Uniform Resource Identifier (URI) for token.
-    /// @dev Overrides ERC721 tokenURI to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC721 tokenURI to add access control. Requires VIEWER_ROLE.
     /// @param tokenId The token ID to query.
     /// @return The token URI string.
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.tokenURI(tokenId);
     }
 
     /// @notice Returns the account approved for token ID.
-    /// @dev Overrides ERC721 getApproved to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC721 getApproved to add access control. Requires VIEWER_ROLE.
     /// @param tokenId The token ID to query.
     /// @return The address approved for the token.
     function getApproved(uint256 tokenId) public view virtual override returns (address) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.getApproved(tokenId);
     }
 
     /// @notice Returns if the operator is allowed to manage all of the assets of owner.
-    /// @dev Overrides ERC721 isApprovedForAll to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @dev Overrides ERC721 isApprovedForAll to add access control. Requires VIEWER_ROLE.
     /// @param owner The address that owns the tokens.
     /// @param operator The address that acts on behalf of the owner.
     /// @return True if operator is approved to manage owner's tokens.
     function isApprovedForAll(address owner, address operator) public view virtual override returns (bool) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         return super.isApprovedForAll(owner, operator);
     }
 
