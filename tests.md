@@ -7,6 +7,7 @@
 **Test Duration**: 9 minutes
 
 ### Update Log
+- **2025-11-23**: Fixed failing test in uRWA20_Encryption.ts. The "Should NOT allow unauthorized user to decrypt" test was using `tokenAsAuditor.write.processDecryption()` which only submits transactions without checking if they revert. Changed to use `writeContractSync()` with `throwOnReceiptRevert: true` pattern (matching the "Should revoke auditor permission" test). All 6 encryption tests now passing.
 - **2025-11-23**: Expanded view function access control tests from 1 to 9 comprehensive tests. Added granular testing for balanceOf, canTransact, canTransfer, getFrozenTokens, totalSupply, and allowance view functions with proper role-based access control verification. All tests passing. New WIP test suite `test/uRWA20_Encryption.ts` created for encryption-specific testing.
 - **Previous**: Unskipped and fixed mint access control test - Test was previously skipped using complex simulation logic. Updated to use `writeContractSync()` with `throwOnReceiptRevert: true` pattern. Test now passes.
 - **Previous**: Fixed FAILURES #6, #7, #8 (forcedTransfer tests) - Root cause identical to previous failures: incorrect test methodology. Tests were using `write.forcedTransfer()` instead of `writeContractSync()`. Changed both failing tests to use `writeContractSync` with `throwOnReceiptRevert: true`. All forcedTransfer tests now pass.
@@ -502,7 +503,7 @@ If `_update()` or `transfer()` calls this decryption:
 | Forced Transfer | [PASS] Working | [PASS] 3/3 PASS | All forced transfer tests pass | LOW |
 | canTransfer Function | [PASS] Working | [PASS] 2/2 PASS | All canTransfer tests pass | LOW |
 | View Function Access Control | [PASS] Working | [PASS] 9/9 PASS | Comprehensive view function access control tests pass | LOW |
-| Event Decryption | [WIP] | [WIP] IN PROGRESS | New test suite `uRWA20_Encryption.ts` in development | MEDIUM |
+| Event Decryption | [PASS] Working | [PASS] 6/6 PASS | All encryption and auditor permission tests pass | LOW |
 | Production Ready | "Yes" | [PASS] YES | All 34 tests passing, ready for testnet deployment | LOW |
 
 ---
@@ -614,8 +615,10 @@ All test failures have been resolved. The failures were caused by incorrect test
   - User self-read permissions without VIEWER_ROLE
   - Unauthorized access prevention for reading other users' data
 
-### Work In Progress
-- **Encryption Test Suite** (`test/uRWA20_Encryption.ts`): New test file being developed to specifically test Sapphire confidential encryption features, event decryption, and encrypted data handling.
+### Completed Encryption Tests
+- **Encryption Test Suite** (`test/uRWA20_Encryption.ts`): 6/6 tests passing. Successfully tests Sapphire confidential encryption features, event decryption, encrypted data handling, and auditor permissions:
+  - Encrypted Events & Decryption (3/3): Sender decryption, receiver decryption, unauthorized user rejection
+  - Auditor Permissions (3/3): Authorized auditor with specific addresses, full access auditor, auditor permission revocation
 
 ### Contract Status
 The contract implementation is correct. All access control checks are functioning properly. All whitelist enforcement is working as expected. All forced transfer restrictions are properly enforced. All minting access controls are verified. View function access controls are comprehensive and secure. ERC-7943 compliance requirements are fully met. **The contract is ready for testnet deployment.**
