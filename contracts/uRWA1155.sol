@@ -52,13 +52,18 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param encryptedData Encrypted data containing from, to, tokenId, and amount.
     event EncryptedForcedTransfer(bytes encryptedData);
 
+    /// @notice Token URI base.
+    /// @dev Used for returning token URIs.
+    string private _uri;
+
     /// @notice Contract constructor.
     /// @dev Initializes the ERC-1155 token with a URI and grants all roles
     /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
     /// Generates an encryption key for encrypting sensitive events.
     /// @param uri_ The URI for the token metadata.
     /// @param initialAdmin The address to receive initial administrative and operational roles.
-    constructor(string memory uri_, address initialAdmin) ERC1155(uri_) {
+    constructor(string memory uri_, address initialAdmin) {
+        _uri = uri_;
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
         _grantRole(MINTER_ROLE, initialAdmin);
         _grantRole(BURNER_ROLE, initialAdmin);
@@ -132,7 +137,9 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @return The URI string for the token.
     function uri(uint256 id) public view virtual override returns (string memory) {
         require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
-        return super.uri(id);
+        // Solady ERC1155 uses a virtual uri() function that can be overridden
+        // Return the base URI (can be extended to support per-token URIs)
+        return _uri;
     }
 
     /// @notice Returns if the operator is allowed to manage all of the assets of `account`.
