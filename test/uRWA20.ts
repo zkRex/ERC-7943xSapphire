@@ -131,13 +131,13 @@ describe("uRWA20", function () {
       
       // Note: This is a simplified check. In practice, we'd calculate the proper interface ID.
       // For now, we'll test the known interfaces
-      expect(await token.read.supportsInterface(["0x01ffc9a7"])).to.be.true; // IERC165
+      expect(await readToken("supportsInterface", ["0x01ffc9a7"])).to.be.true; // IERC165
     });
   });
 
   describe("canTransact", function () {
     it("Should return false for non-whitelisted account", async function () {
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
     });
 
     it("Should return true for whitelisted account", async function () {
@@ -147,7 +147,7 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(hash, publicClient);
       
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.true;
     });
 
     it("Should return false after removing from whitelist", async function () {
@@ -163,7 +163,7 @@ describe("uRWA20", function () {
       ]);
       await waitForTx(hash2, publicClient);
       
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
     });
   });
 
