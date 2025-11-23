@@ -194,9 +194,10 @@ Network URLs and chain IDs are configured in `hardhat.config.ts`.
 
 The contracts are currently deployed on the Oasis Sapphire testnet:
 
-- **Contract Address**: [`0x5c5FC7995b0Ca3471dea4e5E1b8E1562f2adF4d3`](https://explorer.oasis.io/testnet/sapphire/address/0x5c5FC7995b0Ca3471dea4e5E1b8E1562f2adF4d3)
+- **CalldataEncryption**: [`0x4631BCAbD6dF18D94796344963cB60d44a4136b6`](https://explorer.oasis.io/testnet/sapphire/address/0x4631BCAbD6dF18D94796344963cB60d44a4136b6)
+- **uRWA20**: [`0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D`](https://explorer.oasis.io/testnet/sapphire/address/0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D)
 
-View the deployment on the [Oasis Sapphire Testnet Explorer](https://explorer.oasis.io/testnet/sapphire/address/0x5c5FC7995b0Ca3471dea4e5E1b8E1562f2adF4d3).
+View the deployments on the [Oasis Sapphire Testnet Explorer](https://explorer.oasis.io/testnet/sapphire/).
 
 ### Contract Structure
 
