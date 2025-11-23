@@ -270,6 +270,57 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         }
     }
 
+    /// @notice Internal helper to update ownership and balances without emitting Transfer events.
+    /// @dev Uses Solady's internal functions to update state directly for privacy.
+    /// @param from The address sending tokens (zero address for minting).
+    /// @param to The address receiving tokens (zero address for burning).
+    /// @param tokenId The ID of the token being transferred.
+    function _updateOwnershipAndBalance(address from, address to, uint256 tokenId) internal {
+        // Update ownership using Solady's internal _setOwner function
+        // Solady ERC721 uses storage hitchhiking, so we can directly update ownership
+        if (from != address(0)) {
+            // Decrease balance of sender
+            uint256 fromBalance = balanceOf(from);
+            /// @solidity memory-safe-assembly
+            assembly {
+                // Use Solady's storage slot pattern for balance
+                mstore(0x0c, 0x7d8825530a5a2e7a00000000) // _ERC721_MASTER_SLOT_SEED_MASKED
+                mstore(0x00, from)
+                let balanceSlot := keccak256(0x0c, 0x20)
+                let balancePacked := sload(balanceSlot)
+                // Extract and decrement balance (stored in lower 32 bits)
+                let balance := and(balancePacked, 0xffffffff)
+                sstore(balanceSlot, sub(balancePacked, 1))
+            }
+        }
+        
+        if (to != address(0)) {
+            // Increase balance of receiver
+            /// @solidity memory-safe-assembly
+            assembly {
+                // Use Solady's storage slot pattern for balance
+                mstore(0x0c, 0x7d8825530a5a2e7a00000000) // _ERC721_MASTER_SLOT_SEED_MASKED
+                mstore(0x00, to)
+                let balanceSlot := keccak256(0x0c, 0x20)
+                let balancePacked := sload(balanceSlot)
+                // Extract and increment balance (stored in lower 32 bits)
+                let balance := and(balancePacked, 0xffffffff)
+                sstore(balanceSlot, add(balancePacked, 1))
+            }
+        }
+        
+        // Update ownership mapping (tokenId => owner)
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Use Solady's storage slot pattern for ownership
+            mstore(0x0c, 0x7d8825530a5a2e7a00000000) // _ERC721_MASTER_SLOT_SEED_MASKED
+            mstore(0x00, tokenId)
+            let ownerSlot := keccak256(0x0c, 0x20)
+            // Store owner in upper 160 bits, clear lower bits
+            sstore(ownerSlot, or(shl(96, to), and(sload(ownerSlot), not(shl(96, 0xffffffffffffffffffffffffffffffffffffffff)))))
+        }
+    }
+
     /// @notice Hook that is called during any token transfer, including minting and burning.
     /// @dev Overrides the ERC-721 `_update` hook. Enforces transfer restrictions based on {canTransfer} and {canTransact} logics.
     /// Calls super._update() to handle balance and ownership updates (will emit standard Transfer events).
