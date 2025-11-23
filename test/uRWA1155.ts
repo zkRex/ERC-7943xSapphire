@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked } from "viem";
+import { readContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
 
@@ -14,6 +15,30 @@ describe("uRWA1155", function () {
   let thirdAccount: any;
   let publicClient: any;
 
+  // Helper to read from contract with signed queries on Sapphire
+  // On Sapphire, view calls must be signed to have a non-zero msg.sender.
+  // Viem's contract.read.* uses the public client, so we use readContract with wallet client.
+  async function readToken(
+    functionName: any,
+    args: any[] = [],
+    walletClient: any = owner
+  ): Promise<any> {
+    if (hre.network.name === "sapphire-localnet") {
+      // On Sapphire, use readContract with wallet client to sign the query
+      const abi = await hre.artifacts.readArtifact("uRWA1155");
+      return readContract(walletClient, {
+        address: token.address,
+        abi: abi.abi,
+        functionName,
+        args,
+        account: walletClient.account,
+      } as any);
+    } else {
+      // For non-Sapphire networks, use regular contract.read
+      return (token.read as any)[functionName](args);
+    }
+  }
+
   async function deployTokenFixture() {
     const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
     
@@ -26,6 +51,24 @@ describe("uRWA1155", function () {
       ["https://example.com/{id}.json", ownerWallet.account.address],
       config
     );
+
+    // Grant VIEWER_ROLE to all test accounts
+    // Compute VIEWER_ROLE directly: keccak256(abi.encodePacked("VIEWER_ROLE"))
+    // This matches Solidity's keccak256("VIEWER_ROLE")
+    const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
+    
+    // Grant roles sequentially to avoid potential issues
+    const hash1 = await tokenContract.write.grantRole([
+      viewerRole,
+      getAddress(otherAccountWallet.account.address),
+    ]);
+    await waitForTx(hash1, client);
+    
+    const hash2 = await tokenContract.write.grantRole([
+      viewerRole,
+      getAddress(thirdAccountWallet.account.address),
+    ]);
+    await waitForTx(hash2, client);
 
     return {
       token: tokenContract,
@@ -54,7 +97,7 @@ describe("uRWA1155", function () {
 
   describe("canTransact", function () {
     it("Should return false for non-whitelisted account", async function () {
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
     });
 
     it("Should return true for whitelisted account", async function () {
@@ -64,7 +107,7 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(hash, publicClient);
       
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.true;
     });
   });
 
@@ -83,7 +126,7 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(mintHash, publicClient);
       
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(otherAccount.account.address),
         1n,
       ])).to.equal(parseEther("100"));
@@ -98,7 +141,7 @@ describe("uRWA1155", function () {
       await waitForTx(hash, publicClient);
       
       // Verify account is not whitelisted
-      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.false;
+      expect(await readToken("canTransact", [getAddress(otherAccount.account.address)])).to.be.false;
       
       // Use simulateContract to check if it would revert
       await expect(
@@ -129,7 +172,7 @@ describe("uRWA1155", function () {
       const burnHash = await token.write.burn([1n, parseEther("50")]);
       await waitForTx(burnHash, publicClient);
       
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(owner.account.address),
         1n,
       ])).to.equal(parseEther("50"));
@@ -158,7 +201,7 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(freezeHash, publicClient);
       
-      expect(await token.read.getFrozenTokens([
+      expect(await readToken("getFrozenTokens", [
         getAddress(otherAccount.account.address),
         1n,
       ])).to.equal(parseEther("50"));
@@ -196,11 +239,11 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(transferHash, publicClient);
       
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(owner.account.address),
         1n,
       ])).to.equal(parseEther("50"));
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(otherAccount.account.address),
         1n,
       ])).to.equal(parseEther("50"));
@@ -232,17 +275,17 @@ describe("uRWA1155", function () {
       await waitForTx(freezeHash, publicClient);
 
       // Verify frozen tokens
-      expect(await token.read.getFrozenTokens([
+      expect(await readToken("getFrozenTokens", [
         getAddress(owner.account.address),
         1n,
       ])).to.equal(parseEther("60"));
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(owner.account.address),
         1n,
       ])).to.equal(parseEther("100"));
       
       // Verify canTransfer returns false
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
@@ -299,17 +342,17 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(forceHash, publicClient);
       
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(owner.account.address),
         1n,
       ])).to.equal(parseEther("50"));
-      expect(await token.read.balanceOf([
+      expect(await readToken("balanceOf", [
         getAddress(otherAccount.account.address),
         1n,
       ])).to.equal(parseEther("50"));
       // Frozen tokens should be reduced since we transferred from frozen balance
       // Unfrozen was 40, we transferred 50, so we took 10 from frozen: 60 - 10 = 50
-      expect(await token.read.getFrozenTokens([
+      expect(await readToken("getFrozenTokens", [
         getAddress(owner.account.address),
         1n,
       ])).to.equal(parseEther("50"));
@@ -335,7 +378,7 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(mintHash, publicClient);
 
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
@@ -368,7 +411,7 @@ describe("uRWA1155", function () {
       ]);
       await waitForTx(freezeHash, publicClient);
 
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
