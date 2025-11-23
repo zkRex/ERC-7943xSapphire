@@ -299,7 +299,8 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
                 mstore(0x0c, from)
                 let fromBalanceSlot := keccak256(0x0c, 0x1c)
                 sstore(fromBalanceSlot, sub(sload(fromBalanceSlot), 1))
-            } else {
+            }
+            if iszero(from) {
                 // Minting: set ownership directly
                 sstore(ownershipSlot, shl(96, to))
             }
