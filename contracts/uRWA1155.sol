@@ -236,13 +236,21 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
             }
         } 
 
+        // Encrypt sensitive event data
+        bytes memory plaintext = abi.encode(from, to, tokenId, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedForcedTransfer(encrypted);
+        
+        // Also emit unencrypted for backward compatibility (can be removed in production)
         emit ForcedTransfer(from, to, tokenId, amount);
+        
         result = true;
     }
 
     /// @notice Updates frozen token amount when a forced transfer or burn exceeds the unfrozen balance.
     /// @dev This function reduces the frozen token amount to ensure consistency when tokens are forcibly
-    /// moved or burned beyond the unfrozen balance. Emits a {Frozen} event when frozen amount is reduced.
+    /// moved or burned beyond the unfrozen balance. Emits an encrypted {EncryptedFrozen} event when frozen amount is reduced.
     /// @param account The address whose frozen tokens may need adjustment.
     /// @param tokenId The ID of the token being transferred or burned.
     /// @param amount The amount being forcibly transferred or burned.
@@ -250,6 +258,14 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
         uint256 unfrozenBalance = _unfrozenBalance(account, tokenId);
         if(amount > unfrozenBalance && amount <= balanceOf(account, tokenId)) { 
             _frozenTokens[account][tokenId] -= amount - unfrozenBalance;
+            
+            // Encrypt sensitive event data
+            bytes memory plaintext = abi.encode(account, tokenId, _frozenTokens[account][tokenId], _eventNonce++);
+            bytes32 nonce = bytes32(_eventNonce);
+            bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+            emit EncryptedFrozen(encrypted);
+            
+            // Also emit unencrypted for backward compatibility (can be removed in production)
             emit Frozen(account, tokenId, _frozenTokens[account][tokenId]);
         }
     }
