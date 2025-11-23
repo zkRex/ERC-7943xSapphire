@@ -10,7 +10,15 @@ const uRWA20Module = buildModule("uRWA20Module", (m) => {
   const initialAdmin = m.getParameter("initialAdmin", process.env.INITIAL_ADMIN || m.getAccount(0));
   const siweDomain = m.getParameter("siweDomain", process.env.SIWE_DOMAIN || "localhost");
 
-  const uRWA20 = m.contract("uRWA20", [tokenName, tokenSymbol, initialAdmin, siweDomain]);
+  // Deploy the CalldataEncryption library first
+  const calldataEncryption = m.library("CalldataEncryption");
+
+  // Deploy uRWA20 contract with the library linked
+  const uRWA20 = m.contract("uRWA20", [tokenName, tokenSymbol, initialAdmin, siweDomain], {
+    libraries: {
+      CalldataEncryption: calldataEncryption,
+    },
+  });
 
   return { uRWA20 };
 });
