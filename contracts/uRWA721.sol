@@ -88,11 +88,19 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         allowed = true;
     }
 
+    /// @notice Internal helper to check whitelist status without access control.
+    /// @dev Used internally by _update to check whitelist during transfers.
+    /// @param account The address to check.
+    /// @return allowed True if the account is whitelisted, false otherwise.
+    function _isWhitelisted(address account) internal view returns (bool allowed) {
+        allowed = _whitelist[account];
+    }
+
     /// @inheritdoc IERC7943NonFungible
     /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public view virtual override returns (bool allowed) {
         require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
-        allowed = _whitelist[account] ? true : false;
+        allowed = _isWhitelisted(account);
     }
 
     /// @inheritdoc IERC7943NonFungible
@@ -202,7 +210,7 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     /// @dev Can only be called by accounts holding the `FORCE_TRANSFER_ROLE`.
     function forcedTransfer(address from, address to, uint256 tokenId) public virtual override onlyRole(FORCE_TRANSFER_ROLE) returns(bool result) {
         require(to != address(0), ERC721InvalidReceiver(address(0)));
-        require(canTransact(to), ERC7943CannotTransact(to));
+        require(_isWhitelisted(to), ERC7943CannotTransact(to));
         require(ownerOf(tokenId) == from, ERC721IncorrectOwner(from, tokenId, ownerOf(tokenId)));
         _excessFrozenUpdate(from , tokenId);
         super._update(to, tokenId, address(0)); // Skip _update override
@@ -256,14 +264,14 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         bool isTransfer = (from != address(0) && to != address(0));
 
         if (isMint) { // Mint
-            require(canTransact(to), ERC7943CannotTransact(to));
+            require(_isWhitelisted(to), ERC7943CannotTransact(to));
         } else if (isBurn) { // Burn
             _excessFrozenUpdate(from, tokenId);
         } else if (isTransfer) { // Transfer
             require(from == _ownerOf(tokenId), ERC721IncorrectOwner(from, tokenId, _ownerOf(tokenId)));
             require(!_frozenTokens[from][tokenId], ERC7943FrozenTokenId(from, tokenId));
-            require(canTransact(from), ERC7943CannotTransact(from));
-            require(canTransact(to), ERC7943CannotTransact(to));
+            require(_isWhitelisted(from), ERC7943CannotTransact(from));
+            require(_isWhitelisted(to), ERC7943CannotTransact(to));
         } else {
             revert ERC721NonexistentToken(tokenId);
         }
