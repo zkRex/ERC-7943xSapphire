@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther, keccak256, encodePacked } from "viem";
+import { getAddress, parseEther, keccak256, encodePacked, hexToSignature, Hex } from "viem";
 import { simulateContract, readContract } from "viem/actions";
 import { sapphireLocalnetChain } from "../hardhat.config";
 import { waitForTx, waitForTxs } from "./utils";
@@ -16,7 +16,7 @@ async function loginAndGetToken(
   walletClient: any,
   chainId: number
 ): Promise<string> {
-  const address = walletClient.account.address;
+  const address = getAddress(walletClient.account.address);
 
   if (sessionTokens.has(address)) {
     return sessionTokens.get(address)!;
@@ -36,11 +36,14 @@ async function loginAndGetToken(
 
   const message = siweMsg.prepareMessage();
 
-  const signature = await walletClient.signMessage({
+  const signatureHex = await walletClient.signMessage({
     message
-  });
+  }) as Hex;
 
-  const token = await tokenContract.read.login([message, signature]);
+  // Split signature into r, s, v components for SignatureRSV struct
+  const sig = hexToSignature(signatureHex);
+
+  const token = await tokenContract.read.login([message, sig]);
 
   sessionTokens.set(address, token);
 
@@ -155,24 +158,24 @@ describe("uRWA20", function () {
     });
 
     it("Should have correct name and symbol", async function () {
-      expect(await readToken("name", [])).to.equal("Test Token");
-      expect(await readToken("symbol", [])).to.equal("TEST");
+      expect(await token.read.name()).to.equal("Test Token");
+      expect(await token.read.symbol()).to.equal("TEST");
     });
 
     it("Should grant all roles to initialAdmin", async function () {
       const ownerAddress = getAddress(owner.account.address);
-      const defaultAdminRole = await readToken("DEFAULT_ADMIN_ROLE", []);
-      const minterRole = await readToken("MINTER_ROLE", []);
-      const burnerRole = await readToken("BURNER_ROLE", []);
-      const freezingRole = await readToken("FREEZING_ROLE", []);
-      const whitelistRole = await readToken("WHITELIST_ROLE", []);
-      const forceTransferRole = await readToken("FORCE_TRANSFER_ROLE", []);
-      expect(await readToken("hasRole", [defaultAdminRole, ownerAddress])).to.be.true;
-      expect(await readToken("hasRole", [minterRole, ownerAddress])).to.be.true;
-      expect(await readToken("hasRole", [burnerRole, ownerAddress])).to.be.true;
-      expect(await readToken("hasRole", [freezingRole, ownerAddress])).to.be.true;
-      expect(await readToken("hasRole", [whitelistRole, ownerAddress])).to.be.true;
-      expect(await readToken("hasRole", [forceTransferRole, ownerAddress])).to.be.true;
+      const defaultAdminRole = await token.read.DEFAULT_ADMIN_ROLE();
+      const minterRole = await token.read.MINTER_ROLE();
+      const burnerRole = await token.read.BURNER_ROLE();
+      const freezingRole = await token.read.FREEZING_ROLE();
+      const whitelistRole = await token.read.WHITELIST_ROLE();
+      const forceTransferRole = await token.read.FORCE_TRANSFER_ROLE();
+      expect(await token.read.hasRole([defaultAdminRole, ownerAddress])).to.be.true;
+      expect(await token.read.hasRole([minterRole, ownerAddress])).to.be.true;
+      expect(await token.read.hasRole([burnerRole, ownerAddress])).to.be.true;
+      expect(await token.read.hasRole([freezingRole, ownerAddress])).to.be.true;
+      expect(await token.read.hasRole([whitelistRole, ownerAddress])).to.be.true;
+      expect(await token.read.hasRole([forceTransferRole, ownerAddress])).to.be.true;
     });
   });
 
@@ -238,8 +241,8 @@ describe("uRWA20", function () {
 
     it("Should revert when called by non-whitelist role", async function () {
       // Verify otherAccount does not have WHITELIST_ROLE
-      const whitelistRole = await readToken("WHITELIST_ROLE", []);
-      expect(await readToken("hasRole", [whitelistRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const whitelistRole = await token.read.WHITELIST_ROLE();
+      expect(await token.read.hasRole([whitelistRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       const config = { client: { public: publicClient, wallet: otherAccount } };
       const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
@@ -303,8 +306,8 @@ describe("uRWA20", function () {
       await waitForTxs([hash1, hash2], publicClient);
 
       // Verify otherAccount does NOT have MINTER_ROLE
-      const minterRole = await readToken("MINTER_ROLE", []);
-      expect(await readToken("hasRole", [minterRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const minterRole = await token.read.MINTER_ROLE();
+      expect(await token.read.hasRole([minterRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       // otherAccount does NOT have MINTER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
@@ -364,8 +367,8 @@ describe("uRWA20", function () {
       await waitForTx(mintHash, publicClient);
 
       // Verify otherAccount does NOT have BURNER_ROLE
-      const burnerRole = await readToken("BURNER_ROLE", []);
-      expect(await readToken("hasRole", [burnerRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const burnerRole = await token.read.BURNER_ROLE();
+      expect(await token.read.hasRole([burnerRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       // otherAccount does NOT have BURNER_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
@@ -402,8 +405,8 @@ describe("uRWA20", function () {
 
     it("Should revert when called by non-freezing role", async function () {
       // Verify otherAccount does NOT have FREEZING_ROLE
-      const freezingRole = await readToken("FREEZING_ROLE", []);
-      expect(await readToken("hasRole", [freezingRole, getAddress(otherAccount.account.address)])).to.be.false;
+      const freezingRole = await token.read.FREEZING_ROLE();
+      expect(await token.read.hasRole([freezingRole, getAddress(otherAccount.account.address)])).to.be.false;
       
       // otherAccount does NOT have FREEZING_ROLE, so this should revert
       const config = { client: { public: publicClient, wallet: otherAccount } };
@@ -847,7 +850,7 @@ describe("uRWA20", function () {
       const viewerRole = keccak256(encodePacked(["string"], ["VIEWER_ROLE"])) as `0x${string}`;
       let needsRevoke = false;
       if (unauthorizedWallet === thirdAccount) {
-        const hasRole = await readToken("hasRole", [viewerRole, getAddress(thirdAccount.account.address)]);
+        const hasRole = await token.read.hasRole([viewerRole, getAddress(thirdAccount.account.address)]);
         if (hasRole) {
           needsRevoke = true;
           const revokeHash = await token.write.revokeRole([
@@ -859,7 +862,7 @@ describe("uRWA20", function () {
       }
 
       // Verify unauthorized account does NOT have VIEWER_ROLE
-      expect(await readToken("hasRole", [viewerRole, getAddress(unauthorizedWallet.account.address)])).to.be.false;
+      expect(await token.read.hasRole([viewerRole, getAddress(unauthorizedWallet.account.address)])).to.be.false;
 
       // Verify view calls revert
       await expect(
