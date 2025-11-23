@@ -27,6 +27,18 @@ describe("uRWA20", function () {
       config
     );
 
+    // Grant VIEWER_ROLE to all test accounts
+    const viewerRole = await tokenContract.read.VIEWER_ROLE();
+    const hash1 = await tokenContract.write.grantRole([
+      viewerRole,
+      getAddress(otherAccountWallet.account.address),
+    ]);
+    const hash2 = await tokenContract.write.grantRole([
+      viewerRole,
+      getAddress(thirdAccountWallet.account.address),
+    ]);
+    await waitForTxs([hash1, hash2], client);
+
     return {
       token: tokenContract,
       owner: ownerWallet,
@@ -575,6 +587,237 @@ describe("uRWA20", function () {
         getAddress(otherAccount.account.address),
         parseEther("50"),
       ])).to.be.false;
+    });
+  });
+
+  describe("View function access control", function () {
+    it("Should allow VIEWER_ROLE to call balanceOf", async function () {
+      const hash1 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      await waitForTx(hash1, publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(owner.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      // Owner has VIEWER_ROLE (granted in constructor)
+      expect(await token.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("100"));
+
+      // otherAccount has VIEWER_ROLE (granted in deployTokenFixture)
+      const config = { client: { public: publicClient, wallet: otherAccount } };
+      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
+      expect(await tokenAsOther.read.balanceOf([getAddress(owner.account.address)])).to.equal(parseEther("100"));
+    });
+
+    it("Should allow VIEWER_ROLE to call canTransact", async function () {
+      const hash1 = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        true,
+      ]);
+      await waitForTx(hash1, publicClient);
+
+      // Owner has VIEWER_ROLE
+      expect(await token.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
+
+      // otherAccount has VIEWER_ROLE
+      const config = { client: { public: publicClient, wallet: otherAccount } };
+      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
+      expect(await tokenAsOther.read.canTransact([getAddress(otherAccount.account.address)])).to.be.true;
+    });
+
+    it("Should allow VIEWER_ROLE to call canTransfer", async function () {
+      const hash1 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      const hash2 = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        true,
+      ]);
+      await waitForTxs([hash1, hash2], publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(owner.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      // Owner has VIEWER_ROLE
+      expect(await token.read.canTransfer([
+        getAddress(owner.account.address),
+        getAddress(otherAccount.account.address),
+        parseEther("50"),
+      ])).to.be.true;
+
+      // otherAccount has VIEWER_ROLE
+      const config = { client: { public: publicClient, wallet: otherAccount } };
+      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
+      expect(await tokenAsOther.read.canTransfer([
+        getAddress(owner.account.address),
+        getAddress(otherAccount.account.address),
+        parseEther("50"),
+      ])).to.be.true;
+    });
+
+    it("Should allow VIEWER_ROLE to call getFrozenTokens", async function () {
+      const hash1 = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        true,
+      ]);
+      await waitForTx(hash1, publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(otherAccount.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      const freezeHash = await token.write.setFrozenTokens([
+        getAddress(otherAccount.account.address),
+        parseEther("30"),
+      ]);
+      await waitForTx(freezeHash, publicClient);
+
+      // Owner has VIEWER_ROLE
+      expect(await token.read.getFrozenTokens([getAddress(otherAccount.account.address)])).to.equal(parseEther("30"));
+
+      // otherAccount has VIEWER_ROLE
+      const config = { client: { public: publicClient, wallet: otherAccount } };
+      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
+      expect(await tokenAsOther.read.getFrozenTokens([getAddress(otherAccount.account.address)])).to.equal(parseEther("30"));
+    });
+
+    it("Should allow VIEWER_ROLE to call totalSupply", async function () {
+      const hash1 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      await waitForTx(hash1, publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(owner.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      // Owner has VIEWER_ROLE
+      expect(await token.read.totalSupply()).to.equal(parseEther("100"));
+
+      // otherAccount has VIEWER_ROLE
+      const config = { client: { public: publicClient, wallet: otherAccount } };
+      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
+      expect(await tokenAsOther.read.totalSupply()).to.equal(parseEther("100"));
+    });
+
+    it("Should allow VIEWER_ROLE to call allowance", async function () {
+      const hash1 = await token.write.changeWhitelist([
+        getAddress(owner.account.address),
+        true,
+      ]);
+      const hash2 = await token.write.changeWhitelist([
+        getAddress(otherAccount.account.address),
+        true,
+      ]);
+      await waitForTxs([hash1, hash2], publicClient);
+
+      const mintHash = await token.write.mint([
+        getAddress(owner.account.address),
+        parseEther("100"),
+      ]);
+      await waitForTx(mintHash, publicClient);
+
+      const approveHash = await token.write.approve([
+        getAddress(otherAccount.account.address),
+        parseEther("50"),
+      ]);
+      await waitForTx(approveHash, publicClient);
+
+      // Owner has VIEWER_ROLE
+      expect(await token.read.allowance([
+        getAddress(owner.account.address),
+        getAddress(otherAccount.account.address),
+      ])).to.equal(parseEther("50"));
+
+      // otherAccount has VIEWER_ROLE
+      const config = { client: { public: publicClient, wallet: otherAccount } };
+      const tokenAsOther = await hre.viem.getContractAt("uRWA20", token.address, config);
+      expect(await tokenAsOther.read.allowance([
+        getAddress(owner.account.address),
+        getAddress(otherAccount.account.address),
+      ])).to.equal(parseEther("50"));
+    });
+
+    it("Should revert view calls from unauthorized accounts", async function () {
+      // Get a new account without VIEWER_ROLE (use 4th account if available, or revoke from thirdAccount)
+      const chain = hre.network.name === "sapphire-localnet" ? sapphireLocalnetChain : undefined;
+      const allWallets = await hre.viem.getWalletClients({ chain });
+      const unauthorizedWallet = allWallets.length > 3 ? allWallets[3] : thirdAccount;
+      
+      // If using thirdAccount, revoke VIEWER_ROLE temporarily
+      const viewerRole = await token.read.VIEWER_ROLE();
+      let needsRevoke = false;
+      if (unauthorizedWallet === thirdAccount) {
+        const hasRole = await token.read.hasRole([viewerRole, getAddress(thirdAccount.account.address)]);
+        if (hasRole) {
+          needsRevoke = true;
+          const revokeHash = await token.write.revokeRole([
+            viewerRole,
+            getAddress(thirdAccount.account.address),
+          ]);
+          await waitForTx(revokeHash, publicClient);
+        }
+      }
+
+      const config = { client: { public: publicClient, wallet: unauthorizedWallet } };
+      const tokenAsUnauthorized = await hre.viem.getContractAt("uRWA20", token.address, config);
+
+      // Verify unauthorized account does NOT have VIEWER_ROLE
+      expect(await token.read.hasRole([viewerRole, getAddress(unauthorizedWallet.account.address)])).to.be.false;
+
+      // Verify view calls revert
+      await expect(
+        tokenAsUnauthorized.read.balanceOf([getAddress(owner.account.address)])
+      ).to.be.rejected;
+
+      await expect(
+        tokenAsUnauthorized.read.canTransact([getAddress(owner.account.address)])
+      ).to.be.rejected;
+
+      await expect(
+        tokenAsUnauthorized.read.canTransfer([
+          getAddress(owner.account.address),
+          getAddress(otherAccount.account.address),
+          parseEther("50"),
+        ])
+      ).to.be.rejected;
+
+      await expect(
+        tokenAsUnauthorized.read.getFrozenTokens([getAddress(owner.account.address)])
+      ).to.be.rejected;
+
+      await expect(
+        tokenAsUnauthorized.read.totalSupply()
+      ).to.be.rejected;
+
+      await expect(
+        tokenAsUnauthorized.read.allowance([
+          getAddress(owner.account.address),
+          getAddress(otherAccount.account.address),
+        ])
+      ).to.be.rejected;
+
+      // Restore VIEWER_ROLE if we revoked it
+      if (needsRevoke) {
+        const grantHash = await token.write.grantRole([
+          viewerRole,
+          getAddress(thirdAccount.account.address),
+        ]);
+        await waitForTx(grantHash, publicClient);
+      }
     });
   });
 });
