@@ -66,6 +66,12 @@ PRIVATE_KEY=your_private_key_here
 
 # Optional: Override localnet URL (defaults to http://localhost:8545)
 LOCALNET_URL=http://localhost:8545
+
+# uRWA20 Deployment Parameters
+TOKEN_NAME=Real World Asset Token
+TOKEN_SYMBOL=RWA
+INITIAL_ADMIN=                    # Leave empty to use deployer's address
+SIWE_DOMAIN=localhost             # For testnet/mainnet, use your actual domain
 ```
 
 **Note**: The `.env` file is gitignored. Never commit private keys to version control.
@@ -115,6 +121,7 @@ All contracts use OpenZeppelin's `AccessControlEnumerable` for role-based access
 - `FREEZING_ROLE`: Can freeze/unfreeze tokens
 - `WHITELIST_ROLE`: Can manage whitelist
 - `FORCE_TRANSFER_ROLE`: Can perform forced transfers
+- `VIEWER_ROLE`: Can view private contract state (balances, frozen amounts, etc.)
 
 ### Common Tasks
 
@@ -125,14 +132,14 @@ pnpm test
 # Run tests with gas reporting
 REPORT_GAS=true pnpm test
 
-# Deploy contracts (localnet)
-pnpm deploy:localnet
+# Deploy uRWA20 contract (localnet)
+pnpm deploy:urwa20:localnet
 
-# Deploy contracts (testnet)
-pnpm deploy:testnet
+# Deploy uRWA20 contract (testnet)
+pnpm deploy:urwa20:testnet
 
-# Deploy contracts (mainnet)
-pnpm deploy:mainnet
+# Deploy uRWA20 contract (mainnet)
+pnpm deploy:urwa20:mainnet
 
 # Compile contracts
 pnpm compile
@@ -140,6 +147,40 @@ pnpm compile
 # Get help
 pnpm hardhat help
 ```
+
+### Contract Verification
+
+After deploying contracts to testnet or mainnet, you can verify them on Sourcify. The project is configured to use Sourcify for verification (Etherscan is disabled).
+
+**Prerequisites:**
+- Contract must be deployed without encryption (encrypted deployments cannot be verified)
+- `hardhat.config.ts` is already configured with Sourcify enabled
+
+**Verification Command:**
+
+```shell
+pnpm hardhat verify --network sapphire-testnet <CONTRACT_ADDRESS> "arg1" "arg2" "arg3" "arg4"
+```
+
+**Example for uRWA20:**
+
+```shell
+pnpm hardhat verify --network sapphire-testnet 0x7442E3dE5f4210Fa2f74e358ba30F9ee6b9f2bd3 \
+  "Battery Included GmbH" \
+  "BAT" \
+  "0xb391EB20b1975160594b74A66f8E4128Ba887c0A" \
+  "localhost"
+```
+
+The constructor arguments for uRWA20 are:
+1. `TOKEN_NAME` - The token name (string)
+2. `TOKEN_SYMBOL` - The token symbol (string)
+3. `INITIAL_ADMIN` - The initial admin address (address)
+4. `SIWE_DOMAIN` - The SIWE authentication domain (string)
+
+**Note**: Replace the contract address and arguments with your actual deployment values. The initial admin address will be your deployer's address if left empty in `.env`.
+
+For more details, see the [Oasis verification documentation](https://docs.oasis.io/build/tools/verification).
 
 ## Specification
 
