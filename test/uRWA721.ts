@@ -196,7 +196,7 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(freezeHash, publicClient);
       
-      expect(await token.read.getFrozenTokens([
+      expect(await readToken("getFrozenTokens", [
         getAddress(otherAccount.account.address),
         1n,
       ])).to.be.true;
@@ -231,7 +231,7 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(transferHash, publicClient);
       
-      expect(await token.read.ownerOf([1n])).to.equal(getAddress(otherAccount.account.address));
+      expect(await readToken("ownerOf", [1n])).to.equal(getAddress(otherAccount.account.address));
     });
 
     it("Should revert transfer when token is frozen", async function () {
@@ -259,13 +259,13 @@ describe("uRWA721", function () {
       await waitForTx(freezeHash, publicClient);
 
       // Verify token is frozen
-      expect(await token.read.getFrozenTokens([
+      expect(await readToken("getFrozenTokens", [
         getAddress(owner.account.address),
         1n,
       ])).to.be.true;
       
       // Verify canTransfer returns false
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
@@ -316,9 +316,9 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(forceHash, publicClient);
       
-      expect(await token.read.ownerOf([1n])).to.equal(getAddress(otherAccount.account.address));
+      expect(await readToken("ownerOf", [1n])).to.equal(getAddress(otherAccount.account.address));
       // Token should be unfrozen after forced transfer
-      expect(await token.read.getFrozenTokens([
+      expect(await readToken("getFrozenTokens", [
         getAddress(owner.account.address),
         1n,
       ])).to.be.false;
@@ -343,7 +343,7 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(mintHash, publicClient);
 
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
@@ -374,7 +374,7 @@ describe("uRWA721", function () {
       ]);
       await waitForTx(freezeHash, publicClient);
 
-      expect(await token.read.canTransfer([
+      expect(await readToken("canTransfer", [
         getAddress(owner.account.address),
         getAddress(otherAccount.account.address),
         1n,
