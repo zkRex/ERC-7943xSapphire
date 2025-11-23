@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {IERC7943Fungible} from "./interfaces/IERC7943.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {ERC20} from "solady/src/tokens/ERC20.sol";
+import {ERC20} from "./base/ERC20.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
 import {Sapphire} from "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
@@ -88,6 +88,10 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     /// @notice Emitted when a forced transfer occurs (encrypted).
     /// @param encryptedData Encrypted data containing from, to, and amount.
     event EncryptedForcedTransfer(bytes encryptedData);
+
+    /// @notice Emitted when an approval occurs (encrypted).
+    /// @param encryptedData Encrypted data containing owner, spender, and amount.
+    event EncryptedApproval(bytes encryptedData);
 
     /// @notice Error used when a zero address is provided where it is not allowed.
     error NotZeroAddress();
@@ -283,9 +287,26 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         return super.allowance(owner, spender);
     }
 
+    /// @notice Returns the current nonce for an owner address (for EIP-2612 permit).
+    /// @dev Overrides standard ERC20 nonces to protect privacy.
+    /// For view calls: returns 0 to prevent information leakage.
+    /// For transactions: requires VIEWER_ROLE.
+    /// @param owner The address to query the nonce for.
+    /// @return The current nonce (0 for unauthenticated view calls).
+    function nonces(address owner) public view virtual override returns (uint256) {
+        // For view calls (msg.sender == address(0)), return 0 to protect privacy
+        if (msg.sender == address(0)) {
+            return 0;
+        }
+        // For transaction calls, require VIEWER_ROLE
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
+        return super.nonces(owner);
+    }
+
     /// @notice Sets `amount` as the allowance of `spender` over the caller's tokens (standard ERC20 override).
-    /// @dev Overrides standard ERC20 approve to enforce whitelist checks.
+    /// @dev Overrides standard ERC20 approve to enforce whitelist checks and suppress Approval events.
     /// Requires both owner and spender to be whitelisted for RWA compliance.
+    /// Does NOT emit standard Approval events for privacy, emits EncryptedApproval instead.
     /// @param spender The address that will be approved to spend tokens.
     /// @param amount The amount of tokens to approve.
     /// @return True if the operation succeeded.
@@ -293,12 +314,40 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         address owner = _msgSender();
         require(_isWhitelisted(owner), ERC7943CannotTransact(owner));
         require(_isWhitelisted(spender), ERC7943CannotTransact(spender));
-        return super.approve(spender, amount);
+        
+        // Update allowance directly without emitting Approval event
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x20, spender)
+            mstore(0x0c, or(shl(96, owner), _ALLOWANCE_SLOT_SEED))
+            sstore(keccak256(0x0c, 0x34), amount)
+        }
+
+        // Encrypt sensitive event data with action, timestamp, and nonce
+        bytes memory plaintext = abi.encode(
+            owner,
+            spender,
+            amount,
+            "approve",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
+        emit EncryptedApproval(encrypted);
+        
+        return true;
     }
 
     /// @notice Sets `amount` as the allowance of `spender` over the `owner`'s tokens via signature (EIP-2612 permit override).
-    /// @dev Overrides standard ERC20 permit to enforce whitelist checks.
+    /// @dev Overrides standard ERC20 permit to enforce whitelist checks and suppress Approval events.
     /// Requires both owner and spender to be whitelisted for RWA compliance.
+    /// Does NOT emit standard Approval events for privacy, emits EncryptedApproval instead.
     /// @param owner The address that owns the tokens.
     /// @param spender The address that will be approved to spend tokens.
     /// @param value The amount of tokens to approve.
@@ -317,7 +366,28 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     ) public virtual override {
         require(_isWhitelisted(owner), ERC7943CannotTransact(owner));
         require(_isWhitelisted(spender), ERC7943CannotTransact(spender));
+        
+        // Call super.permit which validates signature and updates allowance
+        // It no longer emits Approval event (we modified the base ERC20)
         super.permit(owner, spender, value, deadline, v, r, s);
+
+        // Encrypt sensitive event data and emit encrypted approval event
+        bytes memory plaintext = abi.encode(
+            owner,
+            spender,
+            value,
+            "permit",
+            block.timestamp,
+            _eventNonce
+        );
+        bytes32 nonce = bytes32(_eventNonce++);
+        bytes memory encrypted = Sapphire.encrypt(
+            _encryptionKey,
+            nonce,
+            plaintext,
+            abi.encode(address(this)) // Bind to contract address
+        );
+        emit EncryptedApproval(encrypted);
     }
 
     /// @notice Internal helper to update balance without emitting Transfer event.
