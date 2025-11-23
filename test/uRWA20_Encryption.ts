@@ -150,6 +150,8 @@ describe("uRWA20 Encryption & Auditing", function () {
         user2 = fixture.user2;
         auditor = fixture.auditor;
         publicClient = fixture.publicClient;
+
+        sessionTokens.clear();
     });
 
     describe("Encrypted Events & Decryption", function () {
@@ -252,6 +254,15 @@ describe("uRWA20 Encryption & Auditing", function () {
             // Auditor (initially unauthorized) should NOT be able to decrypt
             const configAuditor = { client: { public: publicClient, wallet: auditor } };
             const tokenAsAuditor = await hre.viem.getContractAt("uRWA20", token.address, configAuditor);
+
+            // Verify auditor has no roles/permissions
+            const viewerRole = await token.read.VIEWER_ROLE();
+            expect(await token.read.hasRole([viewerRole, getAddress(auditor.account.address)])).to.be.false;
+
+            const mainAuditorRole = await token.read.MAIN_AUDITOR_ROLE();
+            expect(await token.read.hasRole([mainAuditorRole, getAddress(auditor.account.address)])).to.be.false;
+
+            expect(await token.read.checkAuditorPermission([getAddress(auditor.account.address), getAddress(user1.account.address)])).to.be.false;
 
             // Should revert
             await expect(
