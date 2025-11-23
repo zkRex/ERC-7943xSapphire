@@ -2,71 +2,42 @@
 
 ## Executive Summary
 
-**Status: PARTIALLY FIXED** - Significant progress on uRWA20, uRWA721 and uRWA1155 still need migration.
+**Status: FULLY FIXED** - All privacy issues have been resolved!
 
-Your implementation has made **substantial progress** in addressing privacy concerns. Most critical issues have been resolved:
+Your implementation has **fully addressed** all privacy concerns:
 
 **FIXED**: View functions now require `VIEWER_ROLE` access control  
 **FIXED**: Custom events are now encrypted using Sapphire precompiles  
 **FIXED**: Gas padding added to prevent side-channel leakage  
 **FIXED**: uRWA20 migrated to Solady - no longer emits standard Transfer events
+**FIXED**: uRWA721 migrated to Solady - no longer emits standard Transfer events
+**FIXED**: uRWA1155 migrated to Solady - no longer emits standard Transfer events
 
-**REMAINING ISSUE**: uRWA721 and uRWA1155 still use OpenZeppelin and emit standard Transfer events in plaintext.
-
-**uRWA20 now provides full privacy: encrypted storage, access-controlled queryability, encrypted events, and NO standard Transfer events. uRWA721 and uRWA1155 still need migration to Solady.**
+**All three contracts (uRWA20, uRWA721, uRWA1155) now provide full privacy: encrypted storage, access-controlled queryability, encrypted events, and NO standard Transfer events.**
 
 ## Critical Issues
 
-### 1. Events Leak Private Information [CRITICAL - PARTIALLY FIXED]
+### 1. Events Leak Private Information [CRITICAL - FIXED]
 
-**Status**: Custom events are now encrypted, but standard Transfer events still leak information 
-**Fixed**: 
-- Custom events (`EncryptedTransfer`, `EncryptedWhitelisted`, `EncryptedFrozen`, `EncryptedForcedTransfer`) are now encrypted using `Sapphire.encrypt()`
+**Status**: **RESOLVED** - All standard Transfer events have been eliminated
+
+**Fixed Implementation**: 
+- Custom events (`EncryptedTransfer`, `EncryptedWhitelisted`, `EncryptedFrozen`, `EncryptedForcedTransfer`) are encrypted using `Sapphire.encrypt()`
 - Encryption key is generated in constructor using `Sapphire.randomBytes()`
 - Nonce counter ensures uniqueness of encrypted events
+- **All contracts migrated to Solady**: uRWA20, uRWA721, and uRWA1155 now use Solady instead of OpenZeppelin
+- **No standard Transfer events**: All contracts update balances/ownership directly using storage slots without calling `super._update()`
 
-**Remaining Issue**: Standard Transfer Events Still Emitted
+**uRWA20**: Uses `_updateBalanceWithoutEvent()` helper function to update balances directly via storage slots
 
-Your contracts still call `super._update()` which emits the standard `Transfer` events from OpenZeppelin:
+**uRWA721**: Uses `_updateOwnershipAndBalance()` helper function to update ownership and balances directly via storage slots
 
-**uRWA20** (line 268):
-```solidity
-super._update(from, to, amount); // Emits Transfer(address indexed from, address indexed to, uint256 value)
-```
-
-**uRWA721** (line 285):
-```solidity
-super._update(to, tokenId, auth); // Emits Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
-```
-
-**uRWA1155** (line 305):
-```solidity
-super._update(from, to, ids, values); // Emits TransferSingle/TransferBatch events
-```
+**uRWA1155**: Uses `_updateBalancesWithoutEvent()` helper function to update balances directly via storage slots
 
 **Impact**: 
-- Transfer history is still publicly visible through standard Transfer events
-- `from`, `to`, and `amount`/`tokenId` are exposed in plaintext logs
-- Custom encrypted events provide additional privacy, but don't replace the standard events
-
-**Root Cause: OpenZeppelin v5 Uses Private State Variables**
-
-The fundamental issue is that **OpenZeppelin v5 uses `private` visibility for internal state variables** (`_balances`, `_owners`, `_totalSupply`), which means:
-- Cannot access `_balances[account]` directly from child contracts
-- Cannot manually update balances without calling parent functions
-- Must call `super._update()` to update balances, which emits Transfer events
-- Cannot override `_mint`/`_burn` without emitting events because parent functions emit them
-
-**Solution: Use Solmate Instead of OpenZeppelin**
-
-**Solmate** (or its successor **Solady**) provides a better alternative for privacy-preserving contracts:
-
-**Advantages of Solmate:**
-- **Public state variables**: `balanceOf` and `totalSupply` are `public` mappings/variables
-- **Direct access**: Can read/write `balanceOf[account]` and `totalSupply` directly
-- **No forced events**: Can override `_mint`, `_burn`, `transfer`, `transferFrom` without calling parent
-- **Gas efficient**: More optimized than OpenZeppelin
-- **Simpler structure**: No hidden `private` state that blocks access
+- **No public transfer history**: Standard Transfer events are no longer emitted
+- **Full privacy**: Only encrypted events are emitted, protecting `from`, `to`, and `amount`/`tokenId` information
+- **Complete solution**: Custom encrypted events are now the only events, providing full privacy protection
 
 **Implementation Options:**
 
@@ -230,7 +201,7 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
 
 ### Immediate Actions (Critical)
 
-1. **Switch from OpenZeppelin to Solmate/Solady** **REMAINING ISSUE**
+1. **Switch from OpenZeppelin to Solmate/Solady** **COMPLETED**
    
    **Why OpenZeppelin Can't Be Used:**
    - OpenZeppelin v5 uses `private` visibility for `_balances`, `_owners`, `_totalSupply`
@@ -336,11 +307,15 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
 
 ### Completed Actions
 
-2. **Access Control Added to View Functions** - All view functions now require `VIEWER_ROLE`
+1. **Migrated to Solady** - All contracts (uRWA20, uRWA721, uRWA1155) now use Solady instead of OpenZeppelin
 
-3. **Custom Events Encrypted** - All custom events use `Sapphire.encrypt()`
+2. **Eliminated Standard Transfer Events** - All contracts update balances/ownership directly without emitting standard Transfer events
 
-4. **Gas Padding Added** - `Sapphire.padGas()` called in all `_update` hooks
+3. **Access Control Added to View Functions** - All view functions now require `VIEWER_ROLE`
+
+4. **Custom Events Encrypted** - All custom events use `Sapphire.encrypt()`
+
+5. **Gas Padding Added** - `Sapphire.padGas()` called in all `_update` hooks
 
 ### Medium Priority
 
@@ -383,38 +358,37 @@ Your current tests don't verify privacy. Consider adding:
 
 ## Conclusion
 
-**Status Update**: Significant progress has been made! Most critical privacy issues have been resolved.
+**Status Update**: All privacy issues have been fully resolved!
 
 ### Summary of Current Privacy Status:
 
 1. **View Functions**: Access-controlled with `VIEWER_ROLE` - **FIXED**
 2. **Custom Events**: Encrypted using Sapphire precompiles - **FIXED**
 3. **Gas Padding**: Added to prevent side-channel leakage - **FIXED**
-4. **Standard Transfer Events**: Still emitted in plaintext - **REMAINING ISSUE**
+4. **Standard Transfer Events**: Eliminated - no longer emitted - **FIXED**
 5. **Storage Access Patterns**: Still visible to compute nodes - **ACCEPTABLE LIMITATION**
 
-### Remaining Privacy Leak:
+### Privacy Implementation:
 
-**Standard Transfer Events**: The contracts still call `super._update()` which emits standard `Transfer` events from OpenZeppelin. These events expose:
-- `from` address (sender)
-- `to` address (receiver)
-- `amount` or `tokenId` (transfer details)
+**All Standard Transfer Events Eliminated**: All contracts (uRWA20, uRWA721, uRWA1155) now update balances/ownership directly using Solady's storage slot patterns without calling `super._update()`. This means:
+- No `Transfer` events (ERC20/ERC721)
+- No `TransferSingle`/`TransferBatch` events (ERC1155)
+- Only encrypted custom events are emitted
+- Full transfer privacy achieved
 
-**Impact**: Transfer history is publicly visible through standard events, even though encrypted events are also emitted.
-
-**Solution**:
-1. **Switch to Solmate/Solady** - Use library with public state variables (recommended)
-2. **Copy Solmate files manually** - Full control, no external dependencies
-3. **Accept tradeoff** - Keep OpenZeppelin but acknowledge privacy limitation (not recommended)
+**Migration Complete**: All contracts successfully migrated from OpenZeppelin to Solady:
+- uRWA20: Uses `_updateBalanceWithoutEvent()` helper
+- uRWA721: Uses `_updateOwnershipAndBalance()` helper  
+- uRWA1155: Uses `_updateBalancesWithoutEvent()` helper
 
 ### Overall Assessment:
 
-The implementation now provides:
+The implementation now provides **complete privacy protection**:
 - **Confidential state** (encrypted storage)
 - **Access-controlled queryability** (view functions require authentication)
-- **Encrypted custom events** (additional privacy layer)
+- **Encrypted events only** (no standard Transfer events)
 - **Side-channel protection** (gas padding)
-- **Partial event privacy** (standard Transfer events still leak)
+- **Full event privacy** (all transfer information encrypted)
 
-**Recommendation**: Address the standard Transfer event issue to achieve full privacy. The current implementation is significantly improved but still leaks transfer information through standard events.
+**Recommendation**: The implementation is now fully privacy-compliant. All critical privacy leaks have been addressed. The only remaining limitation is storage access patterns, which is an acceptable tradeoff for most use cases.
 
