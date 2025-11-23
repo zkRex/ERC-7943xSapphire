@@ -273,8 +273,7 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
         address previousOwner = from;
         
         if (from != address(0)) {
-            // Clear approval and update balance
-            _approve(address(0), tokenId, from, false);
+            // Update balance - approvals become invalid automatically when ownership changes
             unchecked {
                 _balances[from] -= 1;
             }
