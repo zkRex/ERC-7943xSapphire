@@ -266,7 +266,13 @@ describe("uRWA20 Encryption & Auditing", function () {
 
             // Should revert
             await expect(
-                tokenAsAuditor.write.processDecryption([encryptedData])
+                auditor.writeContractSync({
+                    address: token.address,
+                    abi: abi.abi,
+                    functionName: 'processDecryption',
+                    args: [encryptedData],
+                    throwOnReceiptRevert: true
+                })
             ).to.be.rejected;
         });
     });
