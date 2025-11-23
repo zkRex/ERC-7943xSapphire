@@ -61,11 +61,11 @@ The fundamental issue is that **OpenZeppelin v5 uses `private` visibility for in
 **Solmate** (or its successor **Solady**) provides a better alternative for privacy-preserving contracts:
 
 **Advantages of Solmate:**
--  **Public state variables**: `balanceOf` and `totalSupply` are `public` mappings/variables
--  **Direct access**: Can read/write `balanceOf[account]` and `totalSupply` directly
--  **No forced events**: Can override `_mint`, `_burn`, `transfer`, `transferFrom` without calling parent
--  **Gas efficient**: More optimized than OpenZeppelin
--  **Simpler structure**: No hidden `private` state that blocks access
+- **Public state variables**: `balanceOf` and `totalSupply` are `public` mappings/variables
+- **Direct access**: Can read/write `balanceOf[account]` and `totalSupply` directly
+- **No forced events**: Can override `_mint`, `_burn`, `transfer`, `transferFrom` without calling parent
+- **Gas efficient**: More optimized than OpenZeppelin
+- **Simpler structure**: No hidden `private` state that blocks access
 
 **Implementation Options:**
 
@@ -109,11 +109,11 @@ Use **Solady** (Solmate's successor) as a library dependency. It's actively main
 **Recommendation: Use Solady as Library Dependency**
 
 **Why Library (Recommended):**
--  Easy dependency management: `pnpm add solady`
--  Can receive security updates and bug fixes via package updates
--  Standard import syntax: `import {ERC20} from "solady/tokens/ERC20.sol";`
--  Less code to maintain in your repository
--  Solady is actively maintained (Solmate is not)
+- Easy dependency management: `pnpm add solady`
+- Can receive security updates and bug fixes via package updates
+- Standard import syntax: `import {ERC20} from "solady/tokens/ERC20.sol";`
+- Less code to maintain in your repository
+- Solady is actively maintained (Solmate is not)
 
 **When to Copy Manually:**
 - If you need to make custom modifications to the base contracts
@@ -128,9 +128,9 @@ Use **Solady** (Solmate's successor) as a library dependency. It's actively main
 4. Override `_mint`, `_burn`, `transfer`, `transferFrom` to update `balanceOf` directly
 5. Emit only encrypted events, never call `super` functions that emit Transfer events
 
-### 2. Public Queryability: View Functions Expose Private State [FIXED ]
+### 2. Public Queryability: View Functions Expose Private State [FIXED]
 
-**Status**:  **RESOLVED** - All view functions now require `VIEWER_ROLE` access control
+**Status**: **RESOLVED** - All view functions now require `VIEWER_ROLE` access control
 
 **Fixed Implementation**:
 
@@ -152,9 +152,9 @@ function canTransact(address account) public view override returns (bool allowed
 **uRWA721** and **uRWA1155**: Similar access control on all view functions.
 
 **Impact**: 
--  **No public queryability**: Only authorized parties with `VIEWER_ROLE` can query sensitive information
--  **Privacy protected**: Token balances, ownership, whitelist status, and freeze amounts are now access-controlled
--  **Proper use of Sapphire**: View-call authentication works correctly - unsigned calls have `msg.sender == address(0)` and are rejected
+- **No public queryability**: Only authorized parties with `VIEWER_ROLE` can query sensitive information
+- **Privacy protected**: Token balances, ownership, whitelist status, and freeze amounts are now access-controlled
+- **Proper use of Sapphire**: View-call authentication works correctly - unsigned calls have `msg.sender == address(0)` and are rejected
 
 **Note**: The `VIEWER_ROLE` must be granted to authorized parties. Consider implementing a role management system for granting/revoking viewer access.
 
@@ -179,9 +179,9 @@ function canTransact(address account) public view override returns (bool allowed
 **Reference**:
 > "Contract state leaks a fine-grained access pattern. Contract state is backed by an encrypted key-value store. However, the trace of encrypted records is leaked to the compute node. As a concrete example, an ERC-20 token transfer would leak which encrypted record is for the sender's account balance and which is for the receiver's account balance. Such a token would be traceable from sender address to receiver address."
 
-### 4. Gas and Timing Side Channels [FIXED ]
+### 4. Gas and Timing Side Channels [FIXED]
 
-**Status**:  **RESOLVED** - Gas padding added to prevent side-channel leakage
+**Status**: **RESOLVED** - Gas padding added to prevent side-channel leakage
 
 **Fixed Implementation**:
 
@@ -203,9 +203,9 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
 ```
 
 **Impact**: 
--  **Constant gas usage**: Gas padding ensures operations take consistent gas regardless of private data values
--  **Side-channel protection**: Conditional branches based on whitelist status, frozen amounts, etc. no longer leak information through gas usage
--  **Proper implementation**: Gas padding values appear to be based on worst-case estimates
+- **Constant gas usage**: Gas padding ensures operations take consistent gas regardless of private data values
+- **Side-channel protection**: Conditional branches based on whitelist status, frozen amounts, etc. no longer leak information through gas usage
+- **Proper implementation**: Gas padding values appear to be based on worst-case estimates
 
 **Note**: Ensure gas padding values are sufficient to cover all code paths. Consider profiling actual gas usage to verify padding amounts.
 
@@ -229,7 +229,7 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
 
 ### Immediate Actions (Critical)
 
-1. **Switch from OpenZeppelin to Solmate/Solady**  **REMAINING ISSUE**
+1. **Switch from OpenZeppelin to Solmate/Solady** **REMAINING ISSUE**
    
    **Why OpenZeppelin Can't Be Used:**
    - OpenZeppelin v5 uses `private` visibility for `_balances`, `_owners`, `_totalSupply`
@@ -333,12 +333,13 @@ Sapphire.padGas(250000); // Estimate worst-case gas: ~200k for batch transfer wi
    - Modify imports to use local copies: `import {ERC20} from "./lib/ERC20.sol";`
    - Gives full control but requires manual updates
 
-### Completed Actions 
-2.  **Access Control Added to View Functions** - All view functions now require `VIEWER_ROLE`
+### Completed Actions
 
-3.  **Custom Events Encrypted** - All custom events use `Sapphire.encrypt()`
+2. **Access Control Added to View Functions** - All view functions now require `VIEWER_ROLE`
 
-4.  **Gas Padding Added** - `Sapphire.padGas()` called in all `_update` hooks
+3. **Custom Events Encrypted** - All custom events use `Sapphire.encrypt()`
+
+4. **Gas Padding Added** - `Sapphire.padGas()` called in all `_update` hooks
 
 ### Medium Priority
 
@@ -385,11 +386,11 @@ Your current tests don't verify privacy. Consider adding:
 
 ### Summary of Current Privacy Status:
 
-1.  **View Functions**: Access-controlled with `VIEWER_ROLE` - **FIXED**
-2.  **Custom Events**: Encrypted using Sapphire precompiles - **FIXED**
-3.  **Gas Padding**: Added to prevent side-channel leakage - **FIXED**
-4.  **Standard Transfer Events**: Still emitted in plaintext - **REMAINING ISSUE**
-5.  **Storage Access Patterns**: Still visible to compute nodes - **ACCEPTABLE LIMITATION**
+1. **View Functions**: Access-controlled with `VIEWER_ROLE` - **FIXED**
+2. **Custom Events**: Encrypted using Sapphire precompiles - **FIXED**
+3. **Gas Padding**: Added to prevent side-channel leakage - **FIXED**
+4. **Standard Transfer Events**: Still emitted in plaintext - **REMAINING ISSUE**
+5. **Storage Access Patterns**: Still visible to compute nodes - **ACCEPTABLE LIMITATION**
 
 ### Remaining Privacy Leak:
 
@@ -408,11 +409,11 @@ Your current tests don't verify privacy. Consider adding:
 ### Overall Assessment:
 
 The implementation now provides:
--  **Confidential state** (encrypted storage)
--  **Access-controlled queryability** (view functions require authentication)
--  **Encrypted custom events** (additional privacy layer)
--  **Side-channel protection** (gas padding)
--  **Partial event privacy** (standard Transfer events still leak)
+- **Confidential state** (encrypted storage)
+- **Access-controlled queryability** (view functions require authentication)
+- **Encrypted custom events** (additional privacy layer)
+- **Side-channel protection** (gas padding)
+- **Partial event privacy** (standard Transfer events still leak)
 
 **Recommendation**: Address the standard Transfer event issue to achieve full privacy. The current implementation is significantly improved but still leaks transfer information through standard events.
 
