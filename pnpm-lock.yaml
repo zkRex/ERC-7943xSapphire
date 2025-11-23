@@ -42,6 +42,9 @@ importers:
       '@oasisprotocol/sapphire-hardhat':
         specifier: ^2.22.2
         version: 2.22.2(hardhat@2.27.0(ts-node@10.9.2(@types/node@24.10.1)(typescript@5.0.4))(typescript@5.0.4))
+      '@oasisprotocol/sapphire-paratime':
+        specifier: ^2.2.0
+        version: 2.2.0
       '@openzeppelin/contracts':
         specifier: ^5.4.0
         version: 5.4.0

@@ -1,8 +1,23 @@
 // @ts-nocheck
-import hre from "hardhat";
-import { parseEther, keccak256, encodePacked, encodeAbiParameters, formatEther } from "viem";
+import { createWalletClient, createPublicClient, http, parseEther, keccak256, encodePacked, encodeAbiParameters, formatEther, defineChain } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import * as dotenv from "dotenv";
 import { join } from "path";
+
+const sapphireLocalnet = defineChain({
+  id: 0x5afd,
+  name: "Sapphire Localnet",
+  nativeCurrency: {
+    decimals: 18,
+    name: "TEST",
+    symbol: "TEST",
+  },
+  rpcUrls: {
+    default: {
+      http: ["http://localhost:8545"],
+    },
+  },
+});
 
 dotenv.config({ path: join(__dirname, ".env") });
 
@@ -31,9 +46,27 @@ const TOKEN_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [],
+    name: "name",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "symbol",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 const CONTRACT_ADDRESS = process.env.Contract_uRWA20 as `0x${string}`;
+const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
+const PRIVATE_KEY_2 = process.env.PRIVATE_KEY_2 as `0x${string}`;
+const PRIVATE_KEY_3 = process.env.PRIVATE_KEY_3 as `0x${string}`;
+const PRIVATE_KEY_4 = process.env.PRIVATE_KEY_4 as `0x${string}`;
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -42,16 +75,41 @@ async function sleep(ms: number) {
 async function waitForTx(hash: `0x${string}`, client: any) {
   console.log(`  ⏳ Waiting for tx: ${hash.slice(0, 10)}...`);
   await client.waitForTransactionReceipt({ hash });
-  await sleep(2000);
+  await sleep(500);
 }
 
 async function main() {
-  console.log("\n🎬 ERC-7943 x Sapphire - Hackathon Demo\n");
+  console.log("\n🎬 ERC-7943 x Sapphire - Hackathon Demo (Localnet)\n");
   console.log("=" .repeat(60));
 
-  // Use hardhat's viem clients which are automatically wrapped by sapphire-hardhat
-  const publicClient = await hre.viem.getPublicClient();
-  const [admin, user1, user2] = await hre.viem.getWalletClients();
+  const publicClient = createPublicClient({
+    chain: sapphireLocalnet,
+    transport: http(),
+  });
+
+  const admin = createWalletClient({
+    account: privateKeyToAccount(PRIVATE_KEY),
+    chain: sapphireLocalnet,
+    transport: http(),
+  });
+
+  const user1 = createWalletClient({
+    account: privateKeyToAccount(PRIVATE_KEY_2),
+    chain: sapphireLocalnet,
+    transport: http(),
+  });
+
+  const user2 = createWalletClient({
+    account: privateKeyToAccount(PRIVATE_KEY_3),
+    chain: sapphireLocalnet,
+    transport: http(),
+  });
+
+  const user3 = createWalletClient({
+    account: privateKeyToAccount(PRIVATE_KEY_4),
+    chain: sapphireLocalnet,
+    transport: http(),
+  });
 
   console.log("\n📋 Contract Information:");
   console.log(`   uRWA20 Token: ${CONTRACT_ADDRESS}`);
@@ -60,6 +118,7 @@ async function main() {
   console.log(`   Admin:  ${admin.account.address}`);
   console.log(`   User 1: ${user1.account.address}`);
   console.log(`   User 2: ${user2.account.address}`);
+  console.log(`   User 3: ${user3.account.address}`);
 
   console.log("\n" + "=" .repeat(60));
   console.log("\n🔐 DEMONSTRATION: Encrypted Calldata Transactions\n");
@@ -191,13 +250,35 @@ async function main() {
   console.log(`      User 2 balance: ${formatEther(balance2After as bigint)} tokens\n`);
 
   // Step 5: Approve and TransferFrom using encrypted calldata
-  console.log("5️⃣  User 2 approves User 1 to spend 100 tokens (Encrypted)");
+  console.log("5️⃣  User 2 approves User 3 to spend 100 tokens (Encrypted)");
+
+  // First whitelist User 3
+  const whitelistParams3 = encodeAbiParameters(
+    [{ type: "address" }, { type: "bool" }],
+    [user3.account.address, true]
+  );
+
+  const encryptedWhitelist3 = await publicClient.readContract({
+    address: CONTRACT_ADDRESS,
+    abi: TOKEN_ABI,
+    functionName: "makeEncryptedTransaction",
+    args: [whitelistSelector, whitelistParams3],
+  });
+
+  const whitelistHash3 = await admin.writeContract({
+    address: CONTRACT_ADDRESS,
+    abi: TOKEN_ABI,
+    functionName: "executeEncrypted",
+    args: [encryptedWhitelist3],
+  });
+
+  await waitForTx(whitelistHash3, publicClient);
 
   const approveAmount = parseEther("100");
   const approveSelector = keccak256(encodePacked(["string"], ["approve(address,uint256)"])).slice(0, 10);
   const approveParams = encodeAbiParameters(
     [{ type: "address" }, { type: "uint256" }],
-    [user1.account.address, approveAmount]
+    [user3.account.address, approveAmount]
   );
 
   const encryptedApprove = await publicClient.readContract({
@@ -217,11 +298,11 @@ async function main() {
   await waitForTx(approveHash, publicClient);
   console.log("   ✅ Approval successful\n");
 
-  console.log("6️⃣  User 1 transfers 100 tokens from User 2 to themselves (Encrypted)");
+  console.log("6️⃣  User 3 transfers 100 tokens from User 2 to themselves (Encrypted)");
   const transferFromSelector = keccak256(encodePacked(["string"], ["transferFrom(address,address,uint256)"])).slice(0, 10);
   const transferFromParams = encodeAbiParameters(
     [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-    [user2.account.address, user1.account.address, approveAmount]
+    [user2.account.address, user3.account.address, approveAmount]
   );
 
   const encryptedTransferFrom = await publicClient.readContract({
@@ -231,7 +312,7 @@ async function main() {
     args: [transferFromSelector, transferFromParams],
   });
 
-  const transferFromHash = await user1.writeContract({
+  const transferFromHash = await user3.writeContract({
     address: CONTRACT_ADDRESS,
     abi: TOKEN_ABI,
     functionName: "executeEncrypted",
@@ -240,13 +321,6 @@ async function main() {
 
   await waitForTx(transferFromHash, publicClient);
 
-  const balance1Final = await publicClient.readContract({
-    address: CONTRACT_ADDRESS,
-    abi: TOKEN_ABI,
-    functionName: "balanceOf",
-    args: [user1.account.address],
-  });
-
   const balance2Final = await publicClient.readContract({
     address: CONTRACT_ADDRESS,
     abi: TOKEN_ABI,
@@ -254,9 +328,16 @@ async function main() {
     args: [user2.account.address],
   });
 
+  const balance3Final = await publicClient.readContract({
+    address: CONTRACT_ADDRESS,
+    abi: TOKEN_ABI,
+    functionName: "balanceOf",
+    args: [user3.account.address],
+  });
+
   console.log(`   ✅ TransferFrom successful!`);
-  console.log(`      User 1 balance: ${formatEther(balance1Final as bigint)} tokens`);
-  console.log(`      User 2 balance: ${formatEther(balance2Final as bigint)} tokens\n`);
+  console.log(`      User 2 balance: ${formatEther(balance2Final as bigint)} tokens`);
+  console.log(`      User 3 balance: ${formatEther(balance3Final as bigint)} tokens\n`);
 
   console.log("\n" + "=" .repeat(60));
   console.log("\n✨ Demo Complete!\n");

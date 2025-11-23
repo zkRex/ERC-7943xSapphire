@@ -898,12 +898,17 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
     }
 
     /// @notice Executes a transaction with encrypted calldata.
-    /// @dev Decrypts the calldata (automatically by Sapphire runtime) and routes to appropriate internal functions.
+    /// @dev Decrypts the calldata and routes to appropriate internal functions.
+    /// The encrypted data is wrapped in a CBOR envelope which needs to be unwrapped.
     /// This is the main entry point for all encrypted write operations.
     /// @param encryptedData The encrypted calldata containing function selector and parameters.
     function executeEncrypted(bytes memory encryptedData) external payable {
-        // Sapphire runtime automatically decrypts the calldata
-        (bytes4 selector, bytes memory params) = abi.decode(encryptedData, (bytes4, bytes));
+        // Decode the CBOR envelope and extract the body
+        // The plaintext has structure: {body: <encoded bytes>}
+        bytes memory decodedData = _decodeCBOREnvelope(encryptedData);
+
+        // Now decode the selector and params from the unwrapped data
+        (bytes4 selector, bytes memory params) = abi.decode(decodedData, (bytes4, bytes));
 
         // Route to appropriate internal function based on selector
         if (selector == this.transfer.selector) {
@@ -937,6 +942,66 @@ contract uRWA20 is Context, ERC20, AccessControlEnumerable, IERC7943Fungible, Si
         } else {
             revert("Invalid function selector");
         }
+    }
+
+    /// @notice Decodes the CBOR envelope wrapping the encrypted calldata.
+    /// @dev The plaintext structure is: map(1) with key "body" containing the encoded data.
+    /// This function extracts the body field from the CBOR map.
+    /// @param cborData The CBOR-encoded plaintext containing the body field.
+    /// @return The decoded bytes from the body field.
+    function _decodeCBOREnvelope(bytes memory cborData) internal pure returns (bytes memory) {
+        // CBOR structure: hex"a1" (map with 1 entry) + key + value
+        // Key: hex"64" "body" (text string of length 4)
+        // Value: CBOR-encoded bytes
+
+        uint256 offset = 0;
+
+        // Check for map(1) marker
+        require(cborData[offset] == 0xa1, "Invalid CBOR map header");
+        offset++;
+
+        // Check for text string of length 4 marker
+        require(cborData[offset] == 0x64, "Invalid CBOR text marker");
+        offset++;
+
+        // Check for "body" key
+        require(
+            cborData[offset] == 0x62 &&
+            cborData[offset + 1] == 0x6f &&
+            cborData[offset + 2] == 0x64 &&
+            cborData[offset + 3] == 0x79,
+            "Invalid body key"
+        );
+        offset += 4;
+
+        // Now parse the CBOR-encoded bytes value
+        // The value is a byte string: marker + length + data
+        uint8 marker = uint8(cborData[offset]);
+        offset++;
+
+        uint256 length;
+        if (marker >= 0x40 && marker <= 0x57) {
+            // Byte string with inline length (0-23 bytes)
+            length = marker - 0x40;
+        } else if (marker == 0x58) {
+            // Byte string with 1-byte length
+            length = uint8(cborData[offset]);
+            offset++;
+        } else if (marker == 0x59) {
+            // Byte string with 2-byte length
+            length = (uint256(uint8(cborData[offset])) << 8) | uint256(uint8(cborData[offset + 1]));
+            offset += 2;
+        } else {
+            revert("Invalid CBOR byte string marker");
+        }
+
+        // Extract the actual data
+        bytes memory result = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            result[i] = cborData[offset + i];
+        }
+
+        return result;
     }
 
     /// @notice Internal function to execute transfer with encrypted calldata.

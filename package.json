@@ -22,7 +22,8 @@
     "check-balance:mainnet": "ts-node scripts/check-balance.ts sapphire",
     "send-to-address:testnet": "ts-node scripts/send-to-address.ts",
     "create-key-and-fund:testnet": "ts-node scripts/create-key-and-fund.ts",
-    "demo": "tsx demo/demo.ts"
+    "demo": "hardhat run demo/demo.ts --network sapphire-testnet",
+    "demo:localnet": "ts-node demo/demo-localnet.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.3",
@@ -34,6 +35,7 @@
     "@nomicfoundation/hardhat-viem": "^2.1.3",
     "@oasisprotocol/sapphire-contracts": "^0.2.15",
     "@oasisprotocol/sapphire-hardhat": "^2.22.2",
+    "@oasisprotocol/sapphire-paratime": "^2.2.0",
     "@openzeppelin/contracts": "^5.4.0",
     "@types/chai": "^4.3.20",
     "@types/chai-as-promised": "^7.1.8",
