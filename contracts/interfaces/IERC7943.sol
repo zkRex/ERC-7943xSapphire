@@ -51,22 +51,25 @@ interface IERC7943Fungible is IERC165 {
     /// @notice Checks if a specific account is allowed to transact according to token rules.
     /// @dev This is often used for allowlist/KYC/KYB/AML checks.
     /// @param account The address to check.
+    /// @param token Optional SIWE session token for authenticated view calls.
     /// @return allowed True if the account is allowed, false otherwise.
-    function canTransact(address account) external view returns (bool allowed);
+    function canTransact(address account, bytes memory token) external view returns (bool allowed);
 
     /// @notice Checks the frozen status/amount.
     /// @param account The address of the account.
+    /// @param token Optional SIWE session token for authenticated view calls.
     /// @dev It could return an amount higher than the account's balance.
     /// @return amount The amount of tokens currently frozen for `account`.
-    function getFrozenTokens(address account) external view returns (uint256 amount);
+    function getFrozenTokens(address account, bytes memory token) external view returns (uint256 amount);
 
     /// @notice Checks if a transfer is currently possible according to token rules. It enforces validations on the frozen tokens.
     /// @dev This may involve checks like allowlists, blocklists, transfer limits and other policy-defined restrictions.
     /// @param from The address sending tokens.
-    /// @param to The address receiving tokens. 
+    /// @param to The address receiving tokens.
     /// @param amount The amount being transferred.
+    /// @param token Optional SIWE session token for authenticated view calls.
     /// @return allowed True if the transfer is allowed, false otherwise.
-    function canTransfer(address from, address to, uint256 amount) external view returns (bool allowed);
+    function canTransfer(address from, address to, uint256 amount, bytes memory token) external view returns (bool allowed);
 }
 
 /// @notice Interface for ERC-721 based implementations.
