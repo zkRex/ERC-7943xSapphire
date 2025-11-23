@@ -81,7 +81,10 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     }
 
     /// @inheritdoc IERC7943MultiToken
+    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransfer(address from, address to, uint256 tokenId, uint256 amount) public view virtual override returns (bool allowed) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
         uint256 fromBalance = balanceOf(from, tokenId);
         if (fromBalance < _frozenTokens[from][tokenId]) return allowed;
         if (amount > fromBalance - _frozenTokens[from][tokenId]) return allowed;
@@ -90,22 +93,75 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     }
 
     /// @inheritdoc IERC7943MultiToken
+    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public view virtual override returns (bool allowed) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
         allowed = _whitelist[account] ? true : false;
     }
 
     /// @inheritdoc IERC7943MultiToken
+    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
+    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function getFrozenTokens(address account, uint256 tokenId) external view returns (uint256 amount) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
         amount = _frozenTokens[account][tokenId];
+    }
+
+    /// @notice Returns the balance of `account` for token `id`.
+    /// @dev Overrides ERC1155 balanceOf to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @param account The address to query the balance of.
+    /// @param id The token ID to query.
+    /// @return The balance of the account for the token ID.
+    function balanceOf(address account, uint256 id) public view virtual override returns (uint256) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.balanceOf(account, id);
+    }
+
+    /// @notice Returns the balance of multiple accounts for multiple token IDs.
+    /// @dev Overrides ERC1155 balanceOfBatch to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @param accounts The addresses to query balances for.
+    /// @param ids The token IDs to query.
+    /// @return The balances of the accounts for the token IDs.
+    function balanceOfBatch(address[] memory accounts, uint256[] memory ids) public view virtual override returns (uint256[] memory) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.balanceOfBatch(accounts, ids);
+    }
+
+    /// @notice Returns the URI for token `id`.
+    /// @dev Overrides ERC1155 uri to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @param id The token ID to query.
+    /// @return The URI string for the token.
+    function uri(uint256 id) public view virtual override returns (string memory) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.uri(id);
+    }
+
+    /// @notice Returns if the operator is allowed to manage all of the assets of `account`.
+    /// @dev Overrides ERC1155 isApprovedForAll to add access control. Requires VIEWER_ROLE or authenticated call.
+    /// @param account The address that owns the tokens.
+    /// @param operator The address that acts on behalf of the owner.
+    /// @return True if operator is approved to manage account's tokens.
+    function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
+        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        return super.isApprovedForAll(account, operator);
     }
 
     /// @notice Updates the whitelist status for a given account.
     /// @dev Can only be called by accounts holding the `WHITELIST_ROLE`.
-    /// Emits a {Whitelisted} event upon successful update.
+    /// Emits an encrypted {EncryptedWhitelisted} event to protect privacy.
     /// @param account The address whose whitelist status is to be changed.
     /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
     function changeWhitelist(address account, bool status) external onlyRole(WHITELIST_ROLE) {
         _whitelist[account] = status;
+        
+        // Encrypt sensitive event data
+        bytes memory plaintext = abi.encode(account, status, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedWhitelisted(encrypted);
+        
+        // Also emit unencrypted for backward compatibility (can be removed in production)
         emit Whitelisted(account, status);
     }
 
@@ -130,10 +186,20 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     }
 
     /// @inheritdoc IERC7943MultiToken
-    /// @dev Can only be called by accounts holding the `FREEZING_ROLE`
+    /// @dev Can only be called by accounts holding the `FREEZING_ROLE`.
+    /// Emits an encrypted {EncryptedFrozen} event to protect privacy.
     function setFrozenTokens(address account, uint256 tokenId, uint256 amount) public onlyRole(FREEZING_ROLE) returns(bool result) {        
-        _frozenTokens[account][tokenId] = amount;        
+        _frozenTokens[account][tokenId] = amount;
+        
+        // Encrypt sensitive event data
+        bytes memory plaintext = abi.encode(account, tokenId, amount, _eventNonce++);
+        bytes32 nonce = bytes32(_eventNonce);
+        bytes memory encrypted = Sapphire.encrypt(_encryptionKey, nonce, plaintext, "");
+        emit EncryptedFrozen(encrypted);
+        
+        // Also emit unencrypted for backward compatibility (can be removed in production)
         emit Frozen(account, tokenId, amount);
+        
         result = true;
     }
 
