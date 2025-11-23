@@ -89,10 +89,9 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     }
 
     /// @inheritdoc IERC7943NonFungible
-    /// @dev Requires VIEWER_ROLE or authenticated call (msg.sender != address(0)).
-    /// Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
+    /// @dev Requires VIEWER_ROLE. Unauthenticated view calls (msg.sender == address(0)) are rejected to protect privacy.
     function canTransact(address account) public view virtual override returns (bool allowed) {
-        require(hasRole(VIEWER_ROLE, msg.sender) || msg.sender != address(0), "Access denied");
+        require(hasRole(VIEWER_ROLE, msg.sender), "Access denied");
         allowed = _whitelist[account] ? true : false;
     }
 
