@@ -632,7 +632,7 @@ describe("Auditor Permissions", function () {
 
 **Risk**: Observers could front-run based on gas patterns
 
-**Current Mitigation**: Gas padding already implemented ✅
+**Current Mitigation**: Gas padding already implemented
 
 ### 4. Storage Access Patterns
 
