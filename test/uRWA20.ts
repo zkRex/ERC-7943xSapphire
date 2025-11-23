@@ -308,11 +308,13 @@ describe("uRWA20", function () {
         getAddress(otherAccount.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(thirdAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       // Verify otherAccount does NOT have MINTER_ROLE
       const minterRole = await token.read.MINTER_ROLE();
@@ -829,11 +831,13 @@ describe("uRWA20", function () {
         getAddress(owner.account.address),
         true,
       ]);
+      await waitForTx(hash1, publicClient);
+
       const hash2 = await token.write.changeWhitelist([
         getAddress(otherAccount.account.address),
         true,
       ]);
-      await waitForTxs([hash1, hash2], publicClient);
+      await waitForTx(hash2, publicClient);
 
       const mintHash = await token.write.mint([
         getAddress(owner.account.address),
