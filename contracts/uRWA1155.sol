@@ -246,7 +246,7 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param amount The amount being forcibly transferred or burned.
     function _excessFrozenUpdate(address account, uint256 tokenId, uint256 amount) internal {
         uint256 unfrozenBalance = _unfrozenBalance(account, tokenId);
-        if(amount > unfrozenBalance && amount <= balanceOf(account, tokenId)) { 
+        if(amount > unfrozenBalance && amount <= _balances[tokenId][account]) { 
             _frozenTokens[account][tokenId] -= amount - unfrozenBalance;
             
             // Encrypt sensitive event data
@@ -265,7 +265,8 @@ contract uRWA1155 is Context, ERC1155, AccessControlEnumerable, IERC7943MultiTok
     /// @param tokenId The ID of the token to check
     /// @return unfrozenBalance The amount of tokens available for transfer.
     function _unfrozenBalance(address account, uint256 tokenId) internal view returns(uint256 unfrozenBalance) {
-        unfrozenBalance = balanceOf(account, tokenId) < _frozenTokens[account][tokenId] ? 0 : balanceOf(account, tokenId) - _frozenTokens[account][tokenId];
+        uint256 accountBalance = _balances[tokenId][account];
+        unfrozenBalance = accountBalance < _frozenTokens[account][tokenId] ? 0 : accountBalance - _frozenTokens[account][tokenId];
     }
 
     /// @notice Hook that is called before any token transfer, including minting and burning.
