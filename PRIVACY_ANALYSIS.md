@@ -18,11 +18,11 @@ Your implementation has made **substantial progress** in addressing privacy conc
 
 ### 1. Events Leak Private Information [CRITICAL - PARTIALLY FIXED]
 
-**Status**: Custom events are now encrypted , but standard Transfer events still leak information 
+**Status**: Custom events are now encrypted, but standard Transfer events still leak information 
 **Fixed**: 
--  Custom events (`EncryptedTransfer`, `EncryptedWhitelisted`, `EncryptedFrozen`, `EncryptedForcedTransfer`) are now encrypted using `Sapphire.encrypt()`
--  Encryption key is generated in constructor using `Sapphire.randomBytes()`
--  Nonce counter ensures uniqueness of encrypted events
+- Custom events (`EncryptedTransfer`, `EncryptedWhitelisted`, `EncryptedFrozen`, `EncryptedForcedTransfer`) are now encrypted using `Sapphire.encrypt()`
+- Encryption key is generated in constructor using `Sapphire.randomBytes()`
+- Nonce counter ensures uniqueness of encrypted events
 
 **Remaining Issue**: Standard Transfer Events Still Emitted
 
@@ -44,17 +44,17 @@ super._update(from, to, ids, values); // Emits TransferSingle/TransferBatch even
 ```
 
 **Impact**: 
--  Transfer history is still publicly visible through standard Transfer events
--  `from`, `to`, and `amount`/`tokenId` are exposed in plaintext logs
--  Custom encrypted events provide additional privacy, but don't replace the standard events
+- Transfer history is still publicly visible through standard Transfer events
+- `from`, `to`, and `amount`/`tokenId` are exposed in plaintext logs
+- Custom encrypted events provide additional privacy, but don't replace the standard events
 
 **Root Cause: OpenZeppelin v5 Uses Private State Variables**
 
 The fundamental issue is that **OpenZeppelin v5 uses `private` visibility for internal state variables** (`_balances`, `_owners`, `_totalSupply`), which means:
--  Cannot access `_balances[account]` directly from child contracts
--  Cannot manually update balances without calling parent functions
--  Must call `super._update()` to update balances, which emits Transfer events
--  Cannot override `_mint`/`_burn` without emitting events because parent functions emit them
+- Cannot access `_balances[account]` directly from child contracts
+- Cannot manually update balances without calling parent functions
+- Must call `super._update()` to update balances, which emits Transfer events
+- Cannot override `_mint`/`_burn` without emitting events because parent functions emit them
 
 **Solution: Use Solmate Instead of OpenZeppelin**
 
