@@ -54,12 +54,6 @@ contract uRWA721 is Context, ERC721, AccessControlEnumerable, IERC7943NonFungibl
     /// @param encryptedData Encrypted data containing from, to, and tokenId.
     event EncryptedForcedTransfer(bytes encryptedData);
 
-    /// @notice Emitted when an account's whitelist status is changed.
-    /// @param account The address whose status was changed.
-    /// @param status The new whitelist status (true = whitelisted, false = not whitelisted).
-    /// @dev Deprecated: Use EncryptedWhitelisted instead. Kept for backward compatibility.
-    event Whitelisted(address indexed account, bool status);
-
     /// @notice Contract constructor.
     /// @dev Initializes the ERC-721 token with name and symbol, and grants all roles
     /// (Admin, Minter, Burner, Freezer, Force Transfer, Whitelist, Viewer) to the `initialAdmin`.
