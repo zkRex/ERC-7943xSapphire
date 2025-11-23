@@ -68,6 +68,18 @@ All view functions that access private contract state require authorization:
 - **Self-Read Permissions**: Users can read their own data without `VIEWER_ROLE`
 - **SIWE Authentication**: View functions support SIWE (Sign-In With Ethereum) authentication for secure access
 
+### Encrypted Calldata
+
+The uRWA20 contract supports encrypted calldata to protect transaction parameters from being visible in the block explorer. This implementation uses Oasis's CalldataEncryption library to encrypt all write function parameters (transfers, mints, burns, approvals, etc.) before they are submitted to the blockchain.
+
+**Key Features:**
+- **executeEncrypted()**: Central proxy function that decrypts and routes encrypted calldata to internal functions
+- **makeEncryptedTransaction()**: Client-side helper function for generating encrypted calldata
+- **Function Selector Routing**: Encrypted calldata includes function selectors for proper routing
+- **Access Control Preservation**: All role-based access control is maintained through the encryption layer
+
+For detailed implementation plan, architecture, and testing strategy, see [`encrypted-calldata-implementation-plan.md`](./encrypted-calldata-implementation-plan.md).
+
 ### Encryption Implementation Details
 
 - **Encryption Key**: Contract-specific encryption key generated during deployment
